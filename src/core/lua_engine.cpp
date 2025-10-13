@@ -1,4 +1,5 @@
 #include "lua_engine.h"
+#include "../utils/debug.h"
 #include <Arduino.h>
 #include <cassert>
 
@@ -80,6 +81,7 @@ static void lua_task(void* parameter) {
 
             if (result != LUA_OK) {
                 const char* error = lua_tostring(L, -1);
+                LOG_ERROR("LUA", "Execution error: %s", error);
                 // Call error callback
                 if (error_callback != nullptr) {
                     error_callback(error);
@@ -87,7 +89,7 @@ static void lua_task(void* parameter) {
 
                 lua_pop(L, 1);
             } else {
-                Serial.println("[LUA] Code executed successfully");
+                LOG_INFO("LUA", "Code executed successfully");
             }
 
             // Reset Lua state for next execution (clean isolation)
@@ -109,7 +111,7 @@ static void lua_task(void* parameter) {
 // ═══════════════════════════════════════════════════════
 
 void lua_engine_init() {
-    Serial.println("[LUA] Initializing Lua engine...");
+    LOG_INFO("LUA", "Initializing Lua engine...");
 
     // Create initial Lua state
     reset_lua_state();
@@ -128,18 +130,18 @@ void lua_engine_init() {
         1
     );
 
-    Serial.println("[LUA] Engine initialized (RTOS task on Core 1)");
+    LOG_INFO("LUA", "Engine initialized (RTOS task on Core 1)");
 }
 
 void lua_engine_execute(const char* code) {
     if (L == nullptr) {
-        Serial.println("[LUA] Error: Engine not initialized!");
+        LOG_ERROR("LUA", "Engine not initialized!");
         return;
     }
 
     // If already running, stop and wait
     if (is_running) {
-        Serial.println("[LUA] Stopping current execution...");
+        LOG_DEBUG("LUA", "Stopping current execution...");
         stop_requested = true;
 
         // Wait for current execution to finish (max 5 seconds)
@@ -150,12 +152,12 @@ void lua_engine_execute(const char* code) {
         }
 
         if (is_running) {
-            Serial.println("[LUA] Warning: Timeout waiting for stop!");
+            LOG_ERROR("LUA", "Timeout waiting for stop!");
         }
     }
 
     // Queue new code for execution
-    Serial.println("[LUA] Executing code...");
+    LOG_DEBUG("LUA", "Executing code...");
     code_to_execute = code;
     xSemaphoreGive(execute_semaphore);
 }
@@ -171,9 +173,9 @@ lua_State* lua_engine_get_state() {
 void lua_engine_add_module(ModuleRegisterFunc register_func) {
     if (module_count < 16) {
         registered_modules[module_count++] = register_func;
-        Serial.printf("[LUA] Module registered (total: %d)\n", module_count);
+        LOG_DEBUG("LUA", "Module registered (total: %d)", module_count);
     } else {
-        Serial.println("[LUA] Error: Max modules reached!");
+        LOG_ERROR("LUA", "Max modules reached!");
     }
 }
 

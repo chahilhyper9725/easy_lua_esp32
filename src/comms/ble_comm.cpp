@@ -1,4 +1,5 @@
 #include "ble_comm.h"
+#include "../utils/debug.h"
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
@@ -33,20 +34,20 @@ static bool is_connected = false;
 class ServerCallbacks : public BLEServerCallbacks {
     void onConnect(BLEServer* server) {
         is_connected = true;
-        Serial.println("[BLE] Client connected");
+        LOG_INFO("BLE", "Client connected");
 
         // Request larger MTU for better throughput
         server->updatePeerMTU(server->getConnId(), BLE_MTU);
-        Serial.printf("[BLE] Requested MTU: %d bytes\n", BLE_MTU);
+        LOG_DEBUG("BLE", "Requested MTU: %d bytes", BLE_MTU);
     }
 
     void onDisconnect(BLEServer* server) {
         is_connected = false;
-        Serial.println("[BLE] Client disconnected");
+        LOG_INFO("BLE", "Client disconnected");
 
         // Restart advertising
         BLEDevice::startAdvertising();
-        Serial.println("[BLE] Advertising restarted");
+        LOG_DEBUG("BLE", "Advertising restarted");
     }
 };
 
@@ -61,7 +62,7 @@ class RxCallbacks : public BLECharacteristicCallbacks {
         uint16_t length = characteristic->getLength();
 
         if (length > 0) {
-            Serial.printf("[BLE RX] Received %d bytes\n", length);
+            LOG_TRACE("BLE_RX", "Received %d bytes", length);
 
             // Feed to callback (event_msg decoder)
             if (receive_callback != nullptr) {
@@ -78,7 +79,7 @@ class RxCallbacks : public BLECharacteristicCallbacks {
 void ble_comm_init(const char* device_name, BleReceiveCallback on_receive) {
     receive_callback = on_receive;
 
-    Serial.println("[BLE] Initializing Nordic UART Service (NUS)...");
+    LOG_INFO("BLE", "Initializing Nordic UART Service (NUS)...");
 
     // Initialize BLE
     BLEDevice::init(device_name);
@@ -118,21 +119,17 @@ void ble_comm_init(const char* device_name, BleReceiveCallback on_receive) {
     // Start advertising
     BLEDevice::startAdvertising();
 
-    Serial.println("[BLE] NUS Server started");
-    Serial.print("[BLE] Device name: ");
-    Serial.println(device_name);
-    Serial.print("[BLE] Service UUID: ");
-    Serial.println(NUS_SERVICE_UUID);
-    Serial.print("[BLE] RX UUID (Write): ");
-    Serial.println(NUS_RX_UUID);
-    Serial.print("[BLE] TX UUID (Notify): ");
-    Serial.println(NUS_TX_UUID);
-    Serial.println("[BLE] Waiting for client connection...");
+    LOG_INFO("BLE", "NUS Server started");
+    LOG_DEBUG("BLE", "Device name: %s", device_name);
+    LOG_DEBUG("BLE", "Service UUID: %s", NUS_SERVICE_UUID);
+    LOG_DEBUG("BLE", "RX UUID (Write): %s", NUS_RX_UUID);
+    LOG_DEBUG("BLE", "TX UUID (Notify): %s", NUS_TX_UUID);
+    LOG_INFO("BLE", "Waiting for client connection...");
 }
 
 void ble_comm_send(const uint8_t* data, uint16_t len) {
     if (!is_connected) {
-        Serial.println("[BLE TX] Not connected, cannot send");
+        LOG_DEBUG("BLE_TX", "Not connected, cannot send");
         return;
     }
 
@@ -144,7 +141,7 @@ void ble_comm_send(const uint8_t* data, uint16_t len) {
     uint16_t offset = 0;
     uint16_t chunks = (len + BLE_CHUNK_SIZE - 1) / BLE_CHUNK_SIZE;
 
-    Serial.printf("[BLE TX] Sending %d bytes in %d chunk(s)\n", len, chunks);
+    LOG_TRACE("BLE_TX", "Sending %d bytes in %d chunk(s)", len, chunks);
 
     while (offset < len) {
         // Calculate chunk size
@@ -154,8 +151,8 @@ void ble_comm_send(const uint8_t* data, uint16_t len) {
         tx_characteristic->setValue((uint8_t*)(data + offset), chunk_len);
         tx_characteristic->notify();
 
-        Serial.printf("[BLE TX] Sent chunk %d/%d (%d bytes)\n",
-                      (offset / BLE_CHUNK_SIZE) + 1, chunks, chunk_len);
+        LOG_TRACE("BLE_TX", "Sent chunk %d/%d (%d bytes)",
+                  (offset / BLE_CHUNK_SIZE) + 1, chunks, chunk_len);
 
         offset += chunk_len;
 
@@ -165,7 +162,7 @@ void ble_comm_send(const uint8_t* data, uint16_t len) {
         }
     }
 
-    Serial.printf("[BLE TX] Complete: %d bytes sent\n", len);
+    LOG_TRACE("BLE_TX", "Complete: %d bytes sent", len);
 }
 
 bool ble_comm_is_connected() {

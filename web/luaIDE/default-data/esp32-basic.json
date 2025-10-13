@@ -1,0 +1,121 @@
+{
+    "name": "ESP32 Basic",
+    "description": "Standard ESP32 with Arduino-compatible API",
+    "autocomplete": [
+        {
+            "label": "pinMode",
+            "kind": "Function",
+            "insertText": "pinMode(${1:pin}, ${2:mode})",
+            "documentation": "Configure pin mode (INPUT, OUTPUT, INPUT_PULLUP)",
+            "detail": "pinMode(pin: number, mode: number)"
+        },
+        {
+            "label": "digitalWrite",
+            "kind": "Function",
+            "insertText": "digitalWrite(${1:pin}, ${2:value})",
+            "documentation": "Write digital value to pin (HIGH or LOW)",
+            "detail": "digitalWrite(pin: number, value: number)"
+        },
+        {
+            "label": "digitalRead",
+            "kind": "Function",
+            "insertText": "digitalRead(${1:pin})",
+            "documentation": "Read digital value from pin (returns HIGH or LOW)",
+            "detail": "digitalRead(pin: number): number"
+        },
+        {
+            "label": "analogRead",
+            "kind": "Function",
+            "insertText": "analogRead(${1:pin})",
+            "documentation": "Read analog value from pin (returns 0-4095 for ESP32)",
+            "detail": "analogRead(pin: number): number"
+        },
+        {
+            "label": "analogWrite",
+            "kind": "Function",
+            "insertText": "analogWrite(${1:pin}, ${2:value})",
+            "documentation": "Write PWM value to pin (0-255)",
+            "detail": "analogWrite(pin: number, value: number)"
+        },
+        {
+            "label": "delay",
+            "kind": "Function",
+            "insertText": "delay(${1:ms})",
+            "documentation": "Delay execution for specified milliseconds",
+            "detail": "delay(ms: number)"
+        },
+        {
+            "label": "millis",
+            "kind": "Function",
+            "insertText": "millis()",
+            "documentation": "Get milliseconds since boot",
+            "detail": "millis(): number"
+        },
+        {
+            "label": "micros",
+            "kind": "Function",
+            "insertText": "micros()",
+            "documentation": "Get microseconds since boot",
+            "detail": "micros(): number"
+        },
+        {
+            "label": "map",
+            "kind": "Function",
+            "insertText": "map(${1:value}, ${2:fromLow}, ${3:fromHigh}, ${4:toLow}, ${5:toHigh})",
+            "documentation": "Map a value from one range to another",
+            "detail": "map(value: number, fromLow: number, fromHigh: number, toLow: number, toHigh: number): number"
+        },
+        {
+            "label": "constrain",
+            "kind": "Function",
+            "insertText": "constrain(${1:value}, ${2:min}, ${3:max})",
+            "documentation": "Constrain value between min and max",
+            "detail": "constrain(value: number, min: number, max: number): number"
+        },
+        {
+            "label": "random",
+            "kind": "Function",
+            "insertText": "random(${1:max})",
+            "documentation": "Generate random number between 0 and max-1",
+            "detail": "random(max: number): number"
+        },
+        {
+            "label": "print",
+            "kind": "Function",
+            "insertText": "print(${1:message})",
+            "documentation": "Print message to console",
+            "detail": "print(message: any)"
+        },
+        {
+            "label": "OUTPUT",
+            "kind": "Constant",
+            "insertText": "OUTPUT",
+            "documentation": "Pin mode constant for output mode"
+        },
+        {
+            "label": "INPUT",
+            "kind": "Constant",
+            "insertText": "INPUT",
+            "documentation": "Pin mode constant for input mode"
+        },
+        {
+            "label": "INPUT_PULLUP",
+            "kind": "Constant",
+            "insertText": "INPUT_PULLUP",
+            "documentation": "Pin mode constant for input with internal pullup resistor"
+        },
+        {
+            "label": "HIGH",
+            "kind": "Constant",
+            "insertText": "HIGH",
+            "documentation": "Digital HIGH value (1)"
+        },
+        {
+            "label": "LOW",
+            "kind": "Constant",
+            "insertText": "LOW",
+            "documentation": "Digital LOW value (0)"
+        }
+    ],
+    "apiDocs": "# ESP32 Basic API\n\n## GPIO Functions\n\n**pinMode(pin, mode)** - Configure pin as INPUT, OUTPUT, or INPUT_PULLUP\n\n**digitalWrite(pin, value)** - Write HIGH or LOW to pin\n\n**digitalRead(pin)** - Read digital value from pin (returns HIGH or LOW)\n\n**analogRead(pin)** - Read analog value (0-4095)\n\n**analogWrite(pin, value)** - Write PWM value (0-255)\n\n## Time Functions\n\n**delay(ms)** - Delay execution in milliseconds\n\n**millis()** - Get milliseconds since boot\n\n**micros()** - Get microseconds since boot\n\n## Math Functions\n\n**map(value, fromLow, fromHigh, toLow, toHigh)** - Map value to range\n\n**constrain(value, min, max)** - Constrain value between bounds\n\n**random(max)** - Generate random number 0 to max-1\n\n## Console\n\n**print(message)** - Print to console\n\n## Constants\n\nOUTPUT, INPUT, INPUT_PULLUP, HIGH, LOW\n\n## Example\n\n```lua\npinMode(2, OUTPUT)\nfor i=1,10 do\n  digitalWrite(2, HIGH)\n  delay(500)\n  digitalWrite(2, LOW)\n  delay(500)\nend\n```"
+}

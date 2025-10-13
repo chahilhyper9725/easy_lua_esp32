@@ -1,4 +1,5 @@
 #include "event_msg.h"
+#include "../utils/debug.h"
 #include <map>
 
 // ═══════════════════════════════════════════════════════
@@ -88,13 +89,13 @@ void event_msg_init(EventSendCallback on_send) {
 void event_msg_on(const char* event_name, EventHandler handler) {
     if (handler != nullptr) {
         event_handlers[String(event_name)] = handler;
-        Serial.printf("[EVENT] Registered handler for '%s'\n", event_name);
+        LOG_DEBUG("EVENT", "Registered handler for '%s'", event_name);
     }
 }
 
 void event_msg_on_unhandled(UnhandledEventHandler handler) {
     unhandled_handler = handler;
-    Serial.println("[EVENT] Registered unhandled event handler");
+    LOG_DEBUG("EVENT", "Registered unhandled event handler");
 }
 
 void event_msg_send(const char* name, const uint8_t* data, uint16_t len) {
@@ -172,17 +173,17 @@ void event_msg_feed_byte(uint8_t byte) {
                 auto it = event_handlers.find(event_name);
                 if (it != event_handlers.end()) {
                     // Handler found - call it
-                    Serial.printf("[EVENT] Dispatching '%s' (%d bytes)\n",
-                                  event_name.c_str(), event_data.size());
+                    LOG_TRACE("EVENT", "Dispatching '%s' (%d bytes)",
+                              event_name.c_str(), event_data.size());
                     it->second(event_data);
                 } else if (unhandled_handler != nullptr) {
                     // No specific handler, call unhandled handler with event name
-                    Serial.printf("[EVENT] Unhandled event '%s', calling wildcard handler\n",
-                                  event_name.c_str());
+                    LOG_DEBUG("EVENT", "Unhandled event '%s', calling wildcard handler",
+                              event_name.c_str());
                     unhandled_handler(event_name, event_data);
                 } else {
                     // No handler registered
-                    Serial.printf("[EVENT] Warning: No handler for '%s'\n", event_name.c_str());
+                    LOG_DEBUG("EVENT", "Warning: No handler for '%s'", event_name.c_str());
                 }
                 // Reset for next frame
                 event_msg_reset();

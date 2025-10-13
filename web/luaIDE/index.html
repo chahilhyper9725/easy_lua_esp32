@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua IDE - ESP32 Development</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- TOOLBAR -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <header class="toolbar">
+        <div class="toolbar-left">
+            <h1 class="app-title">🔷 Lua IDE</h1>
+        </div>
+
+        <div class="toolbar-center">
+            <div class="dropdown-group">
+                <label for="product-dropdown">Product:</label>
+                <select id="product-dropdown" class="toolbar-dropdown">
+                    <option>Loading...</option>
+                </select>
+            </div>
+
+            <div class="dropdown-group">
+                <label for="project-dropdown">Project:</label>
+                <select id="project-dropdown" class="toolbar-dropdown">
+                    <option>Loading...</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="toolbar-right">
+            <button id="btn-toggle-api-docs" class="toolbar-btn" title="Toggle API Documentation">
+                📖 API
+            </button>
+            <button id="btn-connect" class="toolbar-btn" title="Connect to ESP32">
+                🔌 Connect
+            </button>
+            <button id="btn-execute" class="toolbar-btn" title="Execute current file (Ctrl+Enter)">
+                ▶ Execute
+            </button>
+            <button id="btn-stop" class="toolbar-btn" title="Stop execution" disabled>
+                ⏹ Stop
+            </button>
+            <button id="btn-settings" class="toolbar-btn" title="Settings">
+                ⚙️ Settings
+            </button>
+            <button id="btn-backup" class="toolbar-btn" title="Backup/Import">
+                💾 Backup
+            </button>
+        </div>
+    </header>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- MAIN LAYOUT -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div class="main-container">
+        <!-- ─────────────────────────────────────────────────────── -->
+        <!-- ACTIVITY BAR (VS Code style) -->
+        <!-- ─────────────────────────────────────────────────────── -->
+        <aside class="activity-bar">
+            <div class="activity-bar-items">
+                <button class="activity-item active" data-panel="projects" title="Projects (Ctrl+Shift+E)">
+                    <span class="activity-icon">📁</span>
+                </button>
+                <button class="activity-item" data-panel="products" title="Products">
+                    <span class="activity-icon">🔷</span>
+                </button>
+                <button class="activity-item" data-panel="debug" title="Debug (Coming Soon)">
+                    <span class="activity-icon">🐛</span>
+                </button>
+            </div>
+            <div class="activity-bar-bottom">
+                <button class="activity-item" data-panel="settings" title="Settings">
+                    <span class="activity-icon">⚙️</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- ─────────────────────────────────────────────────────── -->
+        <!-- SIDE PANEL (Content changes based on active view) -->
+        <!-- ─────────────────────────────────────────────────────── -->
+        <aside class="side-panel">
+            <!-- Projects Panel -->
+            <div id="panel-projects" class="panel-content active">
+                <div class="panel-header">
+                    <h2>PROJECTS</h2>
+                    <button id="btn-collapse-sidebar" class="collapse-btn" title="Collapse sidebar">◀</button>
+                </div>
+
+                <div class="panel-body">
+                    <div id="file-explorer" class="file-tree">
+                        <!-- Populated by app.js -->
+                    </div>
+                    <div class="panel-actions">
+                        <button id="btn-new-project" class="action-btn" title="New Project">
+                            ➕ New Project
+                        </button>
+                        <button id="btn-new-file" class="action-btn" title="New File in Project">
+                            ➕ New File
+                        </button>
+                        <button id="btn-import-project" class="action-btn" title="Import Project">
+                            📥 Import
+                        </button>
+                        <button id="btn-export-project" class="action-btn" title="Export Project">
+                            📤 Export
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Products Panel -->
+            <div id="panel-products" class="panel-content">
+                <div class="panel-header">
+                    <h2>PRODUCTS</h2>
+                </div>
+
+                <div class="panel-body">
+                    <div id="products-list" class="products-tree">
+                        <!-- Populated by app.js -->
+                    </div>
+                    <div class="panel-actions">
+                        <button id="btn-new-product" class="action-btn" title="New Product">
+                            ➕ New Product
+                        </button>
+                        <button id="btn-import-product" class="action-btn" title="Import Product">
+                            📥 Import
+                        </button>
+                        <button id="btn-export-product" class="action-btn" title="Export Product">
+                            📤 Export
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Debug Panel (Future) -->
+            <div id="panel-debug" class="panel-content">
+                <div class="panel-header">
+                    <h2>DEBUG</h2>
+                </div>
+                <div class="panel-body">
+                    <div class="panel-placeholder">
+                        Debug panel coming in Phase 5 (BLE Integration)
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Panel (Future) -->
+            <div id="panel-settings" class="panel-content">
+                <div class="panel-header">
+                    <h2>SETTINGS</h2>
+                </div>
+                <div class="panel-body">
+                    <div class="panel-placeholder">
+                        Settings panel coming in Phase 7
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Resize handle for side panel -->
+        <div id="resize-handle-side" class="resize-handle resize-handle-vertical"></div>
+
+        <!-- ─────────────────────────────────────────────────────── -->
+        <!-- CENTER PANEL: Editor + Console -->
+        <!-- ─────────────────────────────────────────────────────── -->
+        <div class="editor-and-console">
+            <main class="editor-container">
+                <!-- Editor Tabs -->
+                <div class="editor-tabs">
+                    <div id="tabs-list" class="tabs-list">
+                        <!-- Tabs populated dynamically -->
+                        <div class="tab active" data-file-id="placeholder">
+                            <span class="tab-name">main.lua</span>
+                            <button class="tab-close">×</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Monaco Editor Area -->
+                <div id="editor" class="editor-area">
+                    <!-- Monaco editor will be mounted here -->
+                    <div class="editor-placeholder">
+                        <h2>Lua IDE</h2>
+                        <p>Loading editor...</p>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Resize handle for console -->
+            <div id="resize-handle-console" class="resize-handle resize-handle-horizontal"></div>
+
+            <!-- Console (below editor only) -->
+            <section class="console-panel">
+                <div class="console-header">
+                    <div class="console-tabs">
+                        <button class="console-tab active" data-tab="debug">🐛 Debug Console</button>
+                        <button class="console-tab" data-tab="ble">📡 BLE Output</button>
+                    </div>
+                    <div class="console-actions">
+                        <label class="console-checkbox" title="Auto-clear BLE Output on run">
+                            <input type="checkbox" id="chk-autoclear-ble" checked>
+                            <span>Auto-clear</span>
+                        </label>
+                        <button id="btn-copy-console" class="console-btn" title="Copy all">📋</button>
+                        <button id="btn-clear-console" class="console-btn" title="Clear active tab">🗑️</button>
+                        <button id="btn-collapse-console" class="collapse-btn" title="Collapse console">▼</button>
+                    </div>
+                </div>
+                <div class="console-content">
+                    <div id="console-output-debug" class="console-output active">
+                        <div class="console-line">
+                            <span class="console-timestamp">[00:00:00]</span>
+                            <span class="console-message">Lua IDE ready. Connect to ESP32 to begin.</span>
+                        </div>
+                    </div>
+                    <div id="console-output-ble" class="console-output">
+                        <div class="console-line">
+                            <span class="console-timestamp">[00:00:00]</span>
+                            <span class="console-message">BLE Output - awaiting connection...</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Resize handle for API docs -->
+        <div id="resize-handle-api" class="resize-handle resize-handle-vertical"></div>
+
+        <!-- ─────────────────────────────────────────────────────── -->
+        <!-- RIGHT SIDEBAR: API Documentation -->
+        <!-- ─────────────────────────────────────────────────────── -->
+        <aside class="sidebar sidebar-right">
+            <div class="sidebar-header">
+                <h2>API DOCUMENTATION</h2>
+                <button id="btn-collapse-apidocs" class="collapse-btn" title="Collapse documentation">▶</button>
+            </div>
+
+            <div class="sidebar-content">
+                <div class="docs-search">
+                    <input type="text" id="docs-search" placeholder="🔍 Search API..." class="search-input">
+                </div>
+                <div id="api-docs-content" class="docs-content">
+                    <!-- API documentation will be rendered here -->
+                    <p class="docs-placeholder">Select a product to view API documentation.</p>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- STATUS BAR -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <footer class="status-bar">
+        <div class="status-left">
+            <span id="connection-status" class="status-item">
+                🔴 Disconnected
+            </span>
+        </div>
+        <div class="status-center">
+            <span id="cursor-position" class="status-item">Ln 1, Col 1</span>
+            <span class="status-separator">|</span>
+            <span class="status-item">Lua</span>
+            <span class="status-separator">|</span>
+            <span id="active-file" class="status-item">main.lua</span>
+        </div>
+        <div class="status-right">
+            <span class="status-item">UTF-8</span>
+        </div>
+    </footer>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- MODALS (For Phase 2+) -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+
+    <!-- New Project Modal -->
+    <dialog id="modal-new-project" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Project</h2>
+                <button class="modal-close">×</button>
+            </div>
+            <div class="modal-body">
+                <label for="project-name-input">Project Name:</label>
+                <input type="text" id="project-name-input" placeholder="My Project" class="modal-input">
+
+                <label for="project-product-select">Product:</label>
+                <select id="project-product-select" class="modal-select">
+                    <!-- Populated dynamically -->
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-cancel-new-project" class="modal-btn btn-secondary">Cancel</button>
+                <button id="btn-create-project" class="modal-btn btn-primary">Create</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Settings Modal -->
+    <dialog id="modal-settings" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button class="modal-close">×</button>
+            </div>
+            <div class="modal-body">
+                <!-- Settings content will be added in Phase 7 -->
+                <p>Settings panel (coming in Phase 7)</p>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn btn-primary">Close</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- SCRIPTS -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+
+    <!-- Monaco Editor (CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.js"></script>
+
+    <!-- Application Scripts -->
+    <script type="module" src="js/app.js"></script>
+
+</body>
+</html>

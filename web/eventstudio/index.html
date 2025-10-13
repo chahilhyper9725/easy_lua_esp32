@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Studio - ESP32 Lua</title>
+    <style>
+        /* ═══════════════════════════════════════════════════════════════
+           GLOBAL STYLES & VARIABLES
+           ═══════════════════════════════════════════════════════════════ */
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #1f2937;
+            --dark-light: #374151;
+            --gray: #6b7280;
+            --gray-light: #9ca3af;
+            --border: #e5e7eb;
+            --bg-main: #f9fafb;
+            --bg-card: #ffffff;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-main);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           HEADER
+           ═══════════════════════════════════════════════════════════════ */
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 1.5rem 2rem;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 0.95rem;
+            margin-top: 0.25rem;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           CONTAINER & LAYOUT
+           ═══════════════════════════════════════════════════════════════ */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        @media (max-width: 1024px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           CARD COMPONENT
+           ═══════════════════════════════════════════════════════════════ */
+        .card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.25rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           CONNECTION STATUS
+           ═══════════════════════════════════════════════════════════════ */
+        .connection-panel {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .status-badge.disconnected {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-badge.connected {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           BUTTONS
+           ═══════════════════════════════════════════════════════════════ */
+        .btn {
+            padding: 0.625rem 1.25rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #dc2626;
+        }
+
+        .btn-secondary {
+            background: var(--dark-light);
+            color: white;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: var(--dark);
+        }
+
+        .btn-sm {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.875rem;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           FORM ELEMENTS
+           ═══════════════════════════════════════════════════════════════ */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .form-input,
+        .form-textarea,
+        .form-select {
+            width: 100%;
+            padding: 0.625rem 0.875rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .form-input:focus,
+        .form-textarea:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 0.75rem;
+            align-items: end;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           PRESET BUTTONS
+           ═══════════════════════════════════════════════════════════════ */
+        .preset-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .preset-btn {
+            position: relative;
+            padding: 0.75rem 1rem;
+            background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+            overflow: hidden;
+        }
+
+        .preset-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .preset-btn-name {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .preset-btn-event {
+            display: block;
+            font-size: 0.75rem;
+            opacity: 0.9;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .preset-actions {
+            position: absolute;
+            top: 0.25rem;
+            right: 0.25rem;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .preset-btn:hover .preset-actions {
+            opacity: 1;
+        }
+
+        .preset-delete {
+            padding: 0.5rem 0.75rem;
+            background: rgba(239, 68, 68, 0.8);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .preset-delete:hover {
+            background: var(--danger);
+            transform: scale(1.1);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           EVENT LOG
+           ═══════════════════════════════════════════════════════════════ */
+        .event-log {
+            background: #1f2937;
+            border-radius: 8px;
+            padding: 1rem;
+            max-height: 500px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+        }
+
+        .event-log::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .event-log::-webkit-scrollbar-track {
+            background: #374151;
+            border-radius: 4px;
+        }
+
+        .event-log::-webkit-scrollbar-thumb {
+            background: #6b7280;
+            border-radius: 4px;
+        }
+
+        .log-entry {
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+            border-radius: 6px;
+            border-left: 3px solid;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .log-entry.sent {
+            background: rgba(99, 102, 241, 0.1);
+            border-left-color: var(--primary);
+        }
+
+        .log-entry.received {
+            background: rgba(16, 185, 129, 0.1);
+            border-left-color: var(--success);
+        }
+
+        .log-entry.error {
+            background: rgba(239, 68, 68, 0.1);
+            border-left-color: var(--danger);
+        }
+
+        .log-time {
+            color: var(--gray-light);
+            font-size: 0.75rem;
+            margin-right: 0.5rem;
+        }
+
+        .log-event {
+            color: #60a5fa;
+            font-weight: 600;
+        }
+
+        .log-data {
+            color: #9ca3af;
+            margin-left: 1rem;
+            margin-top: 0.25rem;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           DATA TYPE SELECTOR
+           ═══════════════════════════════════════════════════════════════ */
+        .data-type-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .data-type-tab {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .data-type-tab.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           MODAL
+           ═══════════════════════════════════════════════════════════════ */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-lg);
+            animation: slideUp 0.3s;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--gray);
+            padding: 0.25rem;
+            line-height: 1;
+        }
+
+        .modal-close:hover {
+            color: var(--text-primary);
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+            margin-top: 1.5rem;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           UTILITIES
+           ═══════════════════════════════════════════════════════════════ */
+        .text-center {
+            text-align: center;
+        }
+
+        .mb-1 {
+            margin-bottom: 1rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <!-- ═══════════════════════════════════════════════════════════════
+         HEADER
+         ═══════════════════════════════════════════════════════════════ -->
+    <div class="header">
+        <h1>
+            ⚡ Event Studio
+        </h1>
+        <p>Send and receive events over Web Bluetooth</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         MAIN CONTAINER
+         ═══════════════════════════════════════════════════════════════ -->
+    <div class="container">
+        <!-- Connection Card -->
+        <div class="card mb-1">
+            <div class="connection-panel">
+                <div>
+                    <div id="statusBadge" class="status-badge disconnected">
+                        <span class="status-dot"></span>
+                        <span id="statusText">Disconnected</span>
+                    </div>
+                </div>
+                <div>
+                    <button id="btnConnect" class="btn btn-primary">
+                        🔌 Connect to ESP32
+                    </button>
+                    <button id="btnDisconnect" class="btn btn-danger" style="display: none;">
+                        ⛔ Disconnect
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Two Column Layout -->
+        <div class="grid">
+            <!-- Left Column: Send Events -->
+            <div>
+                <!-- Preset Buttons Card -->
+                <div class="card mb-1">
+                    <div class="card-header">
+                        <h2 class="card-title">📌 Quick Presets</h2>
+                        <button id="btnAddPreset" class="btn btn-sm btn-success">
+                            ➕ Add Preset
+                        </button>
+                    </div>
+                    <div id="presetContainer" class="preset-grid">
+                        <!-- Presets will be rendered here -->
+                    </div>
+                    <div id="emptyPresets" class="empty-state" style="display: none;">
+                        <div class="empty-state-icon">📭</div>
+                        <p>No presets yet. Create one to get started!</p>
+                    </div>
+                </div>
+
+                <!-- Send Event Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">📤 Send Event</h2>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Event Name</label>
+                        <input type="text" id="inputEventName" class="form-input" placeholder="e.g., lua_execute, test">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Data Type</label>
+                        <div class="data-type-tabs">
+                            <button class="data-type-tab active" data-type="text">Text</button>
+                            <button class="data-type-tab" data-type="hex">Hex</button>
+                            <button class="data-type-tab" data-type="json">JSON</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Event Data</label>
+                        <textarea id="inputEventData" class="form-textarea" placeholder="Enter your data here..."></textarea>
+                    </div>
+
+                    <button id="btnSend" class="btn btn-primary" style="width: 100%;" disabled>
+                        🚀 Send Event
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Column: Receive Events -->
+            <div>
+                <!-- Event Log Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">📥 Event Log</h2>
+                        <button id="btnClearLog" class="btn btn-sm btn-secondary">
+                            🗑️ Clear
+                        </button>
+                    </div>
+                    <div id="eventLog" class="event-log">
+                        <div class="log-entry">
+                            <span class="log-time">Ready</span>
+                            <span class="log-data">Waiting for connection...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         MODAL: ADD/EDIT PRESET
+         ═══════════════════════════════════════════════════════════════ -->
+    <div id="presetModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Create Preset</h3>
+                <button class="modal-close" onclick="closePresetModal()">&times;</button>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Preset Name</label>
+                <input type="text" id="presetName" class="form-input" placeholder="e.g., LED On, Run Script">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Event Name</label>
+                <input type="text" id="presetEventName" class="form-input" placeholder="e.g., lua_execute">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Event Data</label>
+                <textarea id="presetEventData" class="form-textarea" placeholder="Enter event data..."></textarea>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closePresetModal()">Cancel</button>
+                <button id="btnSavePreset" class="btn btn-success">💾 Save Preset</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         JAVASCRIPT
+         ═══════════════════════════════════════════════════════════════ -->
+    <script type="module">
+        import { encodeEvent, EventDecoder, toHexString, toString, fromHexString } from './event_msg.js';
+
+        // ───────────────────────────────────────────────────────────────
+        // CONSTANTS
+        // ───────────────────────────────────────────────────────────────
+        const NUS_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+        const NUS_RX_CHAR_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';  // Write to ESP32
+        const NUS_TX_CHAR_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';  // Notifications from ESP32
+
+        // ───────────────────────────────────────────────────────────────
+        // GLOBAL STATE
+        // ───────────────────────────────────────────────────────────────
+        let bleDevice = null;
+        let bleServer = null;
+        let rxCharacteristic = null;  // For writing to ESP32
+        let txCharacteristic = null;  // For receiving from ESP32
+        let decoder = new EventDecoder();
+        let presets = [];
+        let currentDataType = 'text';
+
+        // ───────────────────────────────────────────────────────────────
+        // INITIALIZATION
+        // ───────────────────────────────────────────────────────────────
+        window.addEventListener('DOMContentLoaded', () => {
+            loadPresets();
+            renderPresets();
+            setupEventListeners();
+            setupEventHandlers();
+        });
+
+        // ───────────────────────────────────────────────────────────────
+        // EVENT HANDLERS SETUP
+        // ───────────────────────────────────────────────────────────────
+        function setupEventHandlers() {
+            // Register handler for lua_print events (from Lua print() function)
+            decoder.on('lua_print', (data) => {
+                const message = toString(data);
+                logEventWithHex('received', 'lua_print', data);
+            });
+
+            // Register handler for lua_result events
+            decoder.on('lua_result', (data) => {
+                const result = toString(data);
+                logEventWithHex('received', 'lua_result', data);
+            });
+
+            // Wildcard handler for all unhandled events
+            decoder.onUnhandled((name, data) => {
+                logEventWithHex('received', name, data);
+            });
+        }
+
+        // ───────────────────────────────────────────────────────────────
+        // BLUETOOTH CONNECTION
+        // ───────────────────────────────────────────────────────────────
+        async function connectBLE() {
+            try {
+                logEvent('info', 'BLE', 'Requesting device...');
+
+                // Request device
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ services: [NUS_SERVICE_UUID] }],
+                    optionalServices: [NUS_SERVICE_UUID]
+                });
+
+                logEvent('info', 'BLE', `Connecting to ${bleDevice.name}...`);
+
+                // Connect to GATT server
+                bleServer = await bleDevice.gatt.connect();
+                logEvent('success', 'BLE', 'Connected to GATT server');
+
+                // Get Nordic UART Service
+                const service = await bleServer.getPrimaryService(NUS_SERVICE_UUID);
+
+                // Get RX characteristic (write to ESP32)
+                rxCharacteristic = await service.getCharacteristic(NUS_RX_CHAR_UUID);
+
+                // Get TX characteristic (receive from ESP32)
+                txCharacteristic = await service.getCharacteristic(NUS_TX_CHAR_UUID);
+
+                // Start notifications
+                await txCharacteristic.startNotifications();
+                txCharacteristic.addEventListener('characteristicvaluechanged', handleNotification);
+
+                // Update UI
+                updateConnectionStatus(true);
+                logEvent('success', 'BLE', 'Ready to send/receive events');
+
+            } catch (error) {
+                logEvent('error', 'BLE', `Connection failed: ${error.message}`);
+                updateConnectionStatus(false);
+            }
+        }
+
+        function disconnectBLE() {
+            if (bleDevice && bleDevice.gatt.connected) {
+                bleDevice.gatt.disconnect();
+                logEvent('info', 'BLE', 'Disconnected');
+            }
+            updateConnectionStatus(false);
+        }
+
+        function handleNotification(event) {
+            const value = event.target.value;
+            const bytes = new Uint8Array(value.buffer);
+
+            // Feed bytes to decoder
+            decoder.feedBytes(bytes);
+        }
+
+        // ───────────────────────────────────────────────────────────────
+        // SEND EVENT
+        // ───────────────────────────────────────────────────────────────
+        async function sendEvent(eventName, eventData) {
+            if (!rxCharacteristic) {
+                logEvent('error', 'Send', 'Not connected to device');
+                return;
+            }
+
+            try {
+                // Encode event
+                const frame = encodeEvent(eventName, eventData);
+
+                // Send in chunks (480 bytes max, matching ESP32)
+                const CHUNK_SIZE = 480;
+                for (let offset = 0; offset < frame.length; offset += CHUNK_SIZE) {
+                    const chunk = frame.slice(offset, offset + CHUNK_SIZE);
+                    await rxCharacteristic.writeValue(chunk);
+                    if (offset + CHUNK_SIZE < frame.length) {
+                        await new Promise(resolve => setTimeout(resolve, 10));
+                    }
+                }
+
+                // Log success
+                const dataPreview = typeof eventData === 'string' ?
+                    (eventData.length > 50 ? eventData.substring(0, 50) + '...' : eventData) :
+                    `${eventData.length} bytes`;
+                logEvent('sent', eventName, dataPreview);
+
+            } catch (error) {
+                logEvent('error', 'Send', `Failed: ${error.message}`);
+            }
+        }
+
+        // ───────────────────────────────────────────────────────────────
+        // UI EVENT LISTENERS
+        // ───────────────────────────────────────────────────────────────
+        function setupEventListeners() {
+            // Connection buttons
+            document.getElementById('btnConnect').addEventListener('click', connectBLE);
+            document.getElementById('btnDisconnect').addEventListener('click', disconnectBLE);
+
+            // Send button
+            document.getElementById('btnSend').addEventListener('click', () => {
+                const eventName = document.getElementById('inputEventName').value.trim();
+                let eventData = document.getElementById('inputEventData').value;
+
+                if (!eventName) {
+                    alert('Please enter an event name');
+                    return;
+                }
+
+                // Convert data based on type
+                if (currentDataType === 'hex') {
+                    eventData = fromHexString(eventData);
+                } else if (currentDataType === 'json') {
+                    try {
+                        JSON.parse(eventData); // Validate JSON
+                    } catch (e) {
+                        alert('Invalid JSON format');
+                        return;
+                    }
+                }
+
+                sendEvent(eventName, eventData);
+            });
+
+            // Clear log button
+            document.getElementById('btnClearLog').addEventListener('click', () => {
+                document.getElementById('eventLog').innerHTML = '';
+            });
+
+            // Data type tabs
+            document.querySelectorAll('.data-type-tab').forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    document.querySelectorAll('.data-type-tab').forEach(t => t.classList.remove('active'));
+                    e.target.classList.add('active');
+                    currentDataType = e.target.dataset.type;
+                });
+            });
+
+            // Add preset button
+            document.getElementById('btnAddPreset').addEventListener('click', openPresetModal);
+
+            // Save preset button
+            document.getElementById('btnSavePreset').addEventListener('click', savePreset);
+        }
+
+        // ───────────────────────────────────────────────────────────────
+        // PRESET MANAGEMENT
+        // ───────────────────────────────────────────────────────────────
+        function loadPresets() {
+            const saved = localStorage.getItem('eventPresets');
+            if (saved) {
+                presets = JSON.parse(saved);
+            } else {
+                // Add default presets
+                presets = [
+                    {
+                        name: 'Hello World',
+                        eventName: 'lua_execute',
+                        eventData: 'print("Hello from Lua!")\nprint("millis: " .. millis())'
+                    },
+                    {
+                        name: 'Blink LED',
+                        eventName: 'lua_execute',
+                        eventData: 'pinMode(2, OUTPUT)\nfor i=1,5 do\n  print("Blink " .. i)\n  digitalWrite(2, 1)\n  delay(500)\n  digitalWrite(2, 0)\n  delay(500)\nend\nprint("Done!")'
+                    },
+                    {
+                        name: 'Test Event',
+                        eventName: 'test',
+                        eventData: 'Hello from Event Studio!'
+                    }
+                ];
+                savePresetsToStorage();
+            }
+        }
+
+        function savePresetsToStorage() {
+            localStorage.setItem('eventPresets', JSON.stringify(presets));
+        }
+
+        function renderPresets() {
+            const container = document.getElementById('presetContainer');
+            const emptyState = document.getElementById('emptyPresets');
+
+            if (presets.length === 0) {
+                container.innerHTML = '';
+                emptyState.style.display = 'block';
+                return;
+            }
+
+            emptyState.style.display = 'none';
+            container.innerHTML = presets.map((preset, index) => `
+                <button class="preset-btn" onclick="firePreset(${index})">
+                    <span class="preset-btn-name">${escapeHtml(preset.name)}</span>
+                    <span class="preset-btn-event">${escapeHtml(preset.eventName)}</span>
+                    <div class="preset-actions">
+                        <button class="preset-delete" onclick="event.stopPropagation(); deletePreset(${index})">✕</button>
+                    </div>
+                </button>
+            `).join('');
+        }
+
+        window.firePreset = function(index) {
+            const preset = presets[index];
+            sendEvent(preset.eventName, preset.eventData);
+        };
+
+        window.deletePreset = function(index) {
+            if (confirm(`Delete preset "${presets[index].name}"?`)) {
+                presets.splice(index, 1);
+                savePresetsToStorage();
+                renderPresets();
+            }
+        };
+
+        window.openPresetModal = function() {
+            document.getElementById('presetModal').classList.add('active');
+        };
+
+        window.closePresetModal = function() {
+            document.getElementById('presetModal').classList.remove('active');
+            document.getElementById('presetName').value = '';
+            document.getElementById('presetEventName').value = '';
+            document.getElementById('presetEventData').value = '';
+        };
+
+        function savePreset() {
+            const name = document.getElementById('presetName').value.trim();
+            const eventName = document.getElementById('presetEventName').value.trim();
+            const eventData = document.getElementById('presetEventData').value;
+
+            if (!name || !eventName) {
+                alert('Please fill in preset name and event name');
+                return;
+            }
+
+            presets.push({ name, eventName, eventData });
+            savePresetsToStorage();
+            renderPresets();
+            closePresetModal();
+        }
+
+        // ───────────────────────────────────────────────────────────────
+        // UI HELPERS
+        // ───────────────────────────────────────────────────────────────
+        function updateConnectionStatus(connected) {
+            const badge = document.getElementById('statusBadge');
+            const statusText = document.getElementById('statusText');
+            const btnConnect = document.getElementById('btnConnect');
+            const btnDisconnect = document.getElementById('btnDisconnect');
+            const btnSend = document.getElementById('btnSend');
+
+            if (connected) {
+                badge.classList.remove('disconnected');
+                badge.classList.add('connected');
+                statusText.textContent = 'Connected';
+                btnConnect.style.display = 'none';
+                btnDisconnect.style.display = 'inline-flex';
+                btnSend.disabled = false;
+            } else {
+                badge.classList.remove('connected');
+                badge.classList.add('disconnected');
+                statusText.textContent = 'Disconnected';
+                btnConnect.style.display = 'inline-flex';
+                btnDisconnect.style.display = 'none';
+                btnSend.disabled = true;
+            }
+        }
+
+        function logEvent(type, eventName, data) {
+            const log = document.getElementById('eventLog');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+
+            const time = new Date().toLocaleTimeString();
+            entry.innerHTML = `
+                <span class="log-time">${time}</span>
+                <span class="log-event">${escapeHtml(eventName)}</span>
+                <div class="log-data">${escapeHtml(data || '')}</div>
+            `;
+
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+
+            // Keep only last 100 entries
+            while (log.children.length > 100) {
+                log.removeChild(log.firstChild);
+            }
+        }
+
+        function logEventWithHex(type, eventName, dataBytes) {
+            const log = document.getElementById('eventLog');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+
+            const time = new Date().toLocaleTimeString();
+
+            // Convert to string first
+            const stringData = toString(dataBytes);
+
+            // Convert to hex
+            const hexData = toHexString(dataBytes);
+
+            // Truncate hex if too long
+            const maxHexChars = 96; // Show ~32 bytes (3 chars per byte)
+            const hexDisplay = hexData.length > maxHexChars ? hexData.substring(0, maxHexChars) + '...' : hexData;
+
+            entry.innerHTML = `
+                <span class="log-time">${time}</span>
+                <span class="log-event">${escapeHtml(eventName)}</span>
+                <div class="log-data">${escapeHtml(stringData)}</div>
+                <div class="log-data" style="opacity: 0.7; font-size: 0.8em; margin-top: 0.25rem;">[${dataBytes.length} bytes] ${hexDisplay}</div>
+            `;
+
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+
+            // Keep only last 100 entries
+            while (log.children.length > 100) {
+                log.removeChild(log.firstChild);
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

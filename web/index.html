@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Lua - Web Apps</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 3rem;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header p {
+            font-size: 1.25rem;
+            opacity: 0.9;
+        }
+
+        .apps-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .app-card {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .app-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .app-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .app-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 0.75rem;
+        }
+
+        .app-description {
+            color: #718096;
+            line-height: 1.6;
+            margin-bottom: 1rem;
+        }
+
+        .app-features {
+            list-style: none;
+            padding: 0;
+        }
+
+        .app-features li {
+            color: #4a5568;
+            font-size: 0.875rem;
+            padding: 0.25rem 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .app-features li:before {
+            content: "✓";
+            color: #48bb78;
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+
+        .app-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-top: 1rem;
+        }
+
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 3rem;
+            opacity: 0.8;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .apps-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚡ ESP32 Lua</h1>
+            <p>Web Applications for ESP32 Lua Environment</p>
+        </div>
+
+        <div class="apps-grid">
+            <!-- Event Studio App -->
+            <a href="eventstudio/index.html" class="app-card">
+                <div class="app-icon">📡</div>
+                <h2 class="app-title">Event Studio</h2>
+                <p class="app-description">
+                    Send and receive events over Web Bluetooth with a beautiful, intuitive interface.
+                </p>
+                <ul class="app-features">
+                    <li>Web Bluetooth integration</li>
+                    <li>Event presets management</li>
+                    <li>Real-time event log</li>
+                    <li>Lua script execution</li>
+                </ul>
+                <span class="app-badge">ACTIVE</span>
+            </a>
+
+            <!-- Placeholder for second app -->
+            <div class="app-card" style="opacity: 0.6; cursor: not-allowed;">
+                <div class="app-icon">🔧</div>
+                <h2 class="app-title">Coming Soon</h2>
+                <p class="app-description">
+                    More tools and applications for your ESP32 Lua projects.
+                </p>
+                <ul class="app-features">
+                    <li>Under development</li>
+                    <li>Stay tuned</li>
+                </ul>
+                <span class="app-badge" style="background: #718096;">PLANNED</span>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>ESP32 Lua Project - PlatformIO</p>
+        </div>
+    </div>
+</body>
+</html>

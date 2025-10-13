@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include "../core/lua_engine.h"
+#include "../core/event_msg.h"
+#include "../utils/debug.h"
 
 // ═══════════════════════════════════════════════════════
 // ARDUINO MODULE - Arduino-specific functions for Lua
@@ -10,7 +12,7 @@
 // ───────────────────────────────────────────────────────
 void arduino_module_init() {
     // Nothing to initialize for Arduino functions
-    Serial.println("[MODULE] Arduino module initialized");
+    LOG_DEBUG("MODULE", "Arduino module initialized");
 }
 
 // ───────────────────────────────────────────────────────
@@ -93,11 +95,15 @@ static int lua_analogWrite(lua_State* L) {
 // LUA FUNCTIONS - Serial/Debug
 // ───────────────────────────────────────────────────────
 
-// Prints message to Serial
+// Prints message - sends as BLE event "lua_print"
 static int lua_print(lua_State* L) {
     const char* msg = lua_tostring(L, 1);
     if (msg) {
-        Serial.println(msg);
+        // Also log to Serial for local debugging
+        LOG_DEBUG("LUA_PRINT", "%s", msg);
+
+        // Send as BLE event
+        event_msg_send("lua_print", (const uint8_t*)msg, strlen(msg));
     }
     return 0;
 }
