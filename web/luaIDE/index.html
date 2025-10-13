@@ -44,11 +44,11 @@
             <button id="btn-stop" class="toolbar-btn" title="Stop execution" disabled>
                 ⏹ Stop
             </button>
-            <button id="btn-settings" class="toolbar-btn" title="Settings">
-                ⚙️ Settings
-            </button>
-            <button id="btn-backup" class="toolbar-btn" title="Backup/Import">
+            <button id="btn-backup" class="toolbar-btn" title="Full IDE Backup">
                 💾 Backup
+            </button>
+            <button id="btn-restore" class="toolbar-btn" title="Restore from Backup">
+                📥 Restore
             </button>
         </div>
     </header>
@@ -147,14 +147,113 @@
                 </div>
             </div>
 
-            <!-- Settings Panel (Future) -->
+            <!-- Settings Panel -->
             <div id="panel-settings" class="panel-content">
                 <div class="panel-header">
                     <h2>SETTINGS</h2>
+                    <button id="btn-collapse-sidebar" class="collapse-btn" title="Collapse sidebar">◀</button>
                 </div>
                 <div class="panel-body">
-                    <div class="panel-placeholder">
-                        Settings panel coming in Phase 7
+                    <div class="settings-panel-content">
+                        <!-- Editor Settings -->
+                        <div class="settings-section">
+                            <h3 class="settings-section-title">Editor</h3>
+
+                            <label for="sidebar-setting-font-size">Font Size:</label>
+                            <select id="sidebar-setting-font-size" class="modal-select">
+                                <option value="12">12px</option>
+                                <option value="13">13px</option>
+                                <option value="14" selected>14px (Default)</option>
+                                <option value="15">15px</option>
+                                <option value="16">16px</option>
+                                <option value="18">18px</option>
+                                <option value="20">20px</option>
+                            </select>
+
+                            <label for="sidebar-setting-tab-size">Tab Size:</label>
+                            <select id="sidebar-setting-tab-size" class="modal-select">
+                                <option value="2">2 spaces</option>
+                                <option value="4" selected>4 spaces (Default)</option>
+                                <option value="8">8 spaces</option>
+                            </select>
+
+                            <label class="settings-checkbox">
+                                <input type="checkbox" id="sidebar-setting-word-wrap">
+                                <span>Word Wrap</span>
+                            </label>
+
+                            <label class="settings-checkbox">
+                                <input type="checkbox" id="sidebar-setting-minimap" checked>
+                                <span>Show Minimap</span>
+                            </label>
+
+                            <label class="settings-checkbox">
+                                <input type="checkbox" id="sidebar-setting-line-numbers" checked>
+                                <span>Show Line Numbers</span>
+                            </label>
+                        </div>
+
+                        <!-- Theme Settings -->
+                        <div class="settings-section">
+                            <h3 class="settings-section-title">Theme</h3>
+
+                            <label for="sidebar-setting-theme">Editor Theme:</label>
+                            <select id="sidebar-setting-theme" class="modal-select">
+                                <option value="vs-dark" selected>Dark (Default)</option>
+                                <option value="vs-light">Light</option>
+                                <option value="hc-black">High Contrast Dark</option>
+                            </select>
+                        </div>
+
+                        <!-- Auto-Save Settings -->
+                        <div class="settings-section">
+                            <h3 class="settings-section-title">Auto-Save</h3>
+
+                            <label class="settings-checkbox">
+                                <input type="checkbox" id="sidebar-setting-auto-save" checked>
+                                <span>Enable Auto-Save</span>
+                            </label>
+
+                            <label for="sidebar-setting-auto-save-delay">Auto-Save Delay (ms):</label>
+                            <select id="sidebar-setting-auto-save-delay" class="modal-select">
+                                <option value="250">250ms</option>
+                                <option value="500" selected>500ms (Default)</option>
+                                <option value="1000">1000ms (1 second)</option>
+                                <option value="2000">2000ms (2 seconds)</option>
+                            </select>
+                        </div>
+
+                        <!-- Console Settings -->
+                        <div class="settings-section">
+                            <h3 class="settings-section-title">Console</h3>
+
+                            <label class="settings-checkbox">
+                                <input type="checkbox" id="sidebar-setting-console-timestamps" checked>
+                                <span>Show Timestamps</span>
+                            </label>
+
+                            <label class="settings-checkbox">
+                                <input type="checkbox" id="sidebar-setting-ble-autoclear" checked>
+                                <span>Auto-Clear BLE Output on Execute</span>
+                            </label>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="panel-actions">
+                            <button id="btn-settings-sidebar-reset" class="action-btn" title="Reset to Defaults">
+                                ↺ Reset to Defaults
+                            </button>
+                        </div>
+
+                        <!-- About Section -->
+                        <div class="settings-section">
+                            <h3 class="settings-section-title">About</h3>
+                            <p class="settings-about">
+                                <strong>Lua IDE for ESP32</strong><br>
+                                Version 1.0.0<br>
+                                Built with Monaco Editor & Web Bluetooth
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -305,15 +404,160 @@
                 <h2>Settings</h2>
                 <button class="modal-close">×</button>
             </div>
-            <div class="modal-body">
-                <!-- Settings content will be added in Phase 7 -->
-                <p>Settings panel (coming in Phase 7)</p>
+            <div class="modal-body settings-body">
+                <!-- Editor Settings -->
+                <div class="settings-section">
+                    <h3 class="settings-section-title">Editor</h3>
+
+                    <label for="setting-font-size">Font Size:</label>
+                    <select id="setting-font-size" class="modal-select">
+                        <option value="12">12px</option>
+                        <option value="13">13px</option>
+                        <option value="14" selected>14px (Default)</option>
+                        <option value="15">15px</option>
+                        <option value="16">16px</option>
+                        <option value="18">18px</option>
+                        <option value="20">20px</option>
+                    </select>
+
+                    <label for="setting-tab-size">Tab Size:</label>
+                    <select id="setting-tab-size" class="modal-select">
+                        <option value="2">2 spaces</option>
+                        <option value="4" selected>4 spaces (Default)</option>
+                        <option value="8">8 spaces</option>
+                    </select>
+
+                    <label class="settings-checkbox">
+                        <input type="checkbox" id="setting-word-wrap">
+                        <span>Word Wrap</span>
+                    </label>
+
+                    <label class="settings-checkbox">
+                        <input type="checkbox" id="setting-minimap" checked>
+                        <span>Show Minimap</span>
+                    </label>
+
+                    <label class="settings-checkbox">
+                        <input type="checkbox" id="setting-line-numbers" checked>
+                        <span>Show Line Numbers</span>
+                    </label>
+                </div>
+
+                <!-- Theme Settings -->
+                <div class="settings-section">
+                    <h3 class="settings-section-title">Theme</h3>
+
+                    <label for="setting-theme">Editor Theme:</label>
+                    <select id="setting-theme" class="modal-select">
+                        <option value="vs-dark" selected>Dark (Default)</option>
+                        <option value="vs-light">Light</option>
+                        <option value="hc-black">High Contrast Dark</option>
+                    </select>
+                </div>
+
+                <!-- Auto-Save Settings -->
+                <div class="settings-section">
+                    <h3 class="settings-section-title">Auto-Save</h3>
+
+                    <label class="settings-checkbox">
+                        <input type="checkbox" id="setting-auto-save" checked>
+                        <span>Enable Auto-Save</span>
+                    </label>
+
+                    <label for="setting-auto-save-delay">Auto-Save Delay (ms):</label>
+                    <select id="setting-auto-save-delay" class="modal-select">
+                        <option value="250">250ms</option>
+                        <option value="500" selected>500ms (Default)</option>
+                        <option value="1000">1000ms (1 second)</option>
+                        <option value="2000">2000ms (2 seconds)</option>
+                    </select>
+                </div>
+
+                <!-- Console Settings -->
+                <div class="settings-section">
+                    <h3 class="settings-section-title">Console</h3>
+
+                    <label class="settings-checkbox">
+                        <input type="checkbox" id="setting-console-timestamps" checked>
+                        <span>Show Timestamps</span>
+                    </label>
+
+                    <label class="settings-checkbox">
+                        <input type="checkbox" id="setting-ble-autoclear" checked>
+                        <span>Auto-Clear BLE Output on Execute</span>
+                    </label>
+                </div>
+
+                <!-- About Section -->
+                <div class="settings-section">
+                    <h3 class="settings-section-title">About</h3>
+                    <p class="settings-about">
+                        <strong>Lua IDE for ESP32</strong><br>
+                        Version 1.0.0<br>
+                        Built with Monaco Editor & Web Bluetooth
+                    </p>
+                </div>
             </div>
             <div class="modal-footer">
-                <button class="modal-btn btn-primary">Close</button>
+                <button id="btn-settings-reset" class="modal-btn btn-secondary">Reset to Defaults</button>
+                <button id="btn-settings-close" class="modal-btn btn-primary">Save & Close</button>
             </div>
         </div>
     </dialog>
+
+    <!-- Welcome Screen (First-time users) -->
+    <div id="welcome-screen" class="welcome-overlay" style="display: none;">
+        <div class="welcome-dialog">
+            <div class="welcome-header">
+                <h1>🔷 Welcome to Lua IDE</h1>
+                <p>Your ESP32 development environment</p>
+            </div>
+            <div class="welcome-body">
+                <div class="welcome-feature">
+                    <span class="welcome-icon">📝</span>
+                    <div>
+                        <h3>Monaco Editor</h3>
+                        <p>Professional code editor with syntax highlighting and autocomplete</p>
+                    </div>
+                </div>
+                <div class="welcome-feature">
+                    <span class="welcome-icon">📡</span>
+                    <div>
+                        <h3>BLE Integration</h3>
+                        <p>Connect wirelessly to your ESP32 and execute Lua code instantly</p>
+                    </div>
+                </div>
+                <div class="welcome-feature">
+                    <span class="welcome-icon">💾</span>
+                    <div>
+                        <h3>Offline-First</h3>
+                        <p>All your projects are saved locally in your browser</p>
+                    </div>
+                </div>
+                <div class="welcome-feature">
+                    <span class="welcome-icon">📦</span>
+                    <div>
+                        <h3>Products & Projects</h3>
+                        <p>Organize code by hardware products with custom APIs</p>
+                    </div>
+                </div>
+            </div>
+            <div class="welcome-footer">
+                <label class="welcome-checkbox">
+                    <input type="checkbox" id="welcome-dont-show">
+                    <span>Don't show this again</span>
+                </label>
+                <button id="btn-welcome-close" class="welcome-btn">Get Started</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- HIDDEN FILE INPUTS (for import) -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <input type="file" id="file-input-import-project" accept=".json" style="display: none;">
+    <input type="file" id="file-input-import-product" accept=".json" style="display: none;">
+    <input type="file" id="file-input-restore-backup" accept=".json" style="display: none;">
 
     <!-- ═══════════════════════════════════════════════════════════ -->
     <!-- SCRIPTS -->

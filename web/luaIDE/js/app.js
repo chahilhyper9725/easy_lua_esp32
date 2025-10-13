@@ -47,6 +47,28 @@ import {
     shouldAutoClearBLE,
     switchConsoleTab
 } from './console-manager.js';
+import {
+    importProject,
+    importProduct,
+    createFullBackup,
+    restoreFromBackup
+} from './import-export.js';
+import {
+    initializeNotifications,
+    showSuccess as notifySuccess,
+    showError as notifyError,
+    showWarning as notifyWarning,
+    showInfo as notifyInfo,
+    showConfirmation,
+    showLoading,
+    hideLoading
+} from './notification-manager.js';
+import {
+    initializeSettingsModal,
+    openSettingsModal,
+    applySettings,
+    getSettings
+} from './settings-manager.js';
 
 // ═══════════════════════════════════════════════════════════
 // GLOBAL APPLICATION STATE
@@ -253,6 +275,9 @@ async function initializeUI() {
     // Apply theme
     applyTheme(AppState.settings.theme);
 
+    // Initialize notification system
+    initializeNotifications();
+
     // Initialize resize manager
     initializeResize();
 
@@ -274,6 +299,12 @@ async function initializeUI() {
         await initializeEditor();
         console.log('✓ Editor ready');
 
+        // Initialize settings modal and apply settings
+        initializeSettingsModal(EditorState.monacoEditor);
+        const currentSettings = getSettings();
+        applySettings(currentSettings);
+        console.log('✓ Settings applied');
+
         // Setup keyboard shortcuts
         setupKeyboardShortcuts();
 
@@ -292,10 +323,37 @@ async function initializeUI() {
     }
 
     updateUI();
+
+    // Show welcome screen for first-time users
+    showWelcomeIfFirstTime();
 }
 
 function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
+}
+
+// ═══════════════════════════════════════════════════════════
+// WELCOME SCREEN
+// ═══════════════════════════════════════════════════════════
+
+function showWelcomeIfFirstTime() {
+    const hasSeenWelcome = localStorage.getItem('hasSeenWelcome');
+
+    if (!hasSeenWelcome) {
+        const welcomeScreen = document.getElementById('welcome-screen');
+        if (welcomeScreen) {
+            welcomeScreen.style.display = 'flex';
+
+            // Close button
+            document.getElementById('btn-welcome-close')?.addEventListener('click', () => {
+                const dontShowAgain = document.getElementById('welcome-dont-show')?.checked;
+                if (dontShowAgain) {
+                    localStorage.setItem('hasSeenWelcome', 'true');
+                }
+                welcomeScreen.style.display = 'none';
+            });
+        }
+    }
 }
 
 function updateUI() {
@@ -593,11 +651,13 @@ function escapeHtml(text) {
 function showError(message) {
     console.error('Error:', message);
     printError(message);
+    notifyError(message);
 }
 
 function showSuccess(message) {
     console.log('Success:', message);
     printSuccess(message);
+    notifySuccess(message);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -880,12 +940,19 @@ function attachEventListeners() {
         }
     });
 
-    document.getElementById('btn-settings')?.addEventListener('click', () => {
-        showError('Settings (Phase 7 - Coming Soon)');
+    document.getElementById('btn-backup')?.addEventListener('click', () => {
+        try {
+            const result = createFullBackup();
+            showSuccess(result.message);
+            printToConsole(`✓ Backup created: ${result.stats.productCount} products, ${result.stats.projectCount} projects, ${result.stats.totalFiles} files`);
+        } catch (error) {
+            showError('Failed to create backup: ' + error.message);
+        }
     });
 
-    document.getElementById('btn-backup')?.addEventListener('click', () => {
-        showError('Backup/Import (Phase 6 - Coming Soon)');
+    document.getElementById('btn-restore')?.addEventListener('click', () => {
+        // Trigger hidden file input for backup file
+        document.getElementById('file-input-restore-backup')?.click();
     });
 
     // File explorer buttons
@@ -906,7 +973,8 @@ function attachEventListeners() {
     });
 
     document.getElementById('btn-import-project')?.addEventListener('click', () => {
-        showError('Import Project (Phase 6 - Coming Soon)');
+        // Trigger hidden file input for project import
+        document.getElementById('file-input-import-project')?.click();
     });
 
     document.getElementById('btn-export-project')?.addEventListener('click', () => {
@@ -929,7 +997,8 @@ function attachEventListeners() {
     });
 
     document.getElementById('btn-import-product')?.addEventListener('click', () => {
-        showError('Import Product (Phase 3 - Coming Soon)');
+        // Trigger hidden file input for product import
+        document.getElementById('file-input-import-product')?.click();
     });
 
     document.getElementById('btn-export-product')?.addEventListener('click', () => {
@@ -976,6 +1045,70 @@ function attachEventListeners() {
                 showError('Failed to create file: ' + error.message);
             }
         }
+    });
+
+    // Hidden file input handlers for import/restore
+    document.getElementById('file-input-import-project')?.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+            const result = await importProject(file);
+            showSuccess(result.message);
+
+            // Refresh UI to show imported project
+            updateUI();
+
+            // Switch to imported project
+            switchProject(result.project.id);
+        } catch (error) {
+            showError('Import failed: ' + error.message);
+        }
+
+        // Clear the input so the same file can be imported again
+        e.target.value = '';
+    });
+
+    document.getElementById('file-input-import-product')?.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+            const result = await importProduct(file);
+            showSuccess(result.message);
+
+            // Refresh UI to show imported product
+            updateUI();
+
+            // Switch to imported product
+            switchProduct(result.product.id);
+        } catch (error) {
+            showError('Import failed: ' + error.message);
+        }
+
+        // Clear the input
+        e.target.value = '';
+    });
+
+    document.getElementById('file-input-restore-backup')?.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+            // Default to merge mode (can add UI option later for replace mode)
+            const result = await restoreFromBackup(file, 'merge');
+
+            // Show success message and prompt reload
+            alert(result.message);
+
+            // Reload the page to refresh all data
+            window.location.reload();
+        } catch (error) {
+            showError('Restore failed: ' + error.message);
+        }
+
+        // Clear the input
+        e.target.value = '';
     });
 
     console.log('✓ Event listeners attached');

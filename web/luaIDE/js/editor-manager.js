@@ -10,6 +10,8 @@ import {
     toggleConsole
 } from './resize-manager.js';
 import { LUA_STDLIB_AUTOCOMPLETE } from './lua-stdlib-autocomplete.js';
+import { showConfirmation, showError } from './notification-manager.js';
+import { getAutoSaveDelay, isAutoSaveEnabled } from './settings-manager.js';
 
 // ═══════════════════════════════════════════════════════════
 // EDITOR STATE
@@ -116,7 +118,7 @@ export function openFileInEditor(projectId, fileId) {
     renderTabs();
 }
 
-export function closeTab(tabIndex) {
+export async function closeTab(tabIndex) {
     if (tabIndex < 0 || tabIndex >= EditorState.openTabs.length) {
         return;
     }
@@ -125,8 +127,14 @@ export function closeTab(tabIndex) {
 
     // Check for unsaved changes
     if (EditorState.unsavedChanges.has(tab.fileId)) {
-        const confirmClose = confirm(`File "${tab.file.name}" has unsaved changes. Close anyway?`);
-        if (!confirmClose) {
+        const confirmed = await showConfirmation({
+            title: 'Unsaved Changes',
+            message: `File "${tab.file.name}" has unsaved changes. Close anyway?`,
+            confirmText: 'Close',
+            cancelText: 'Cancel',
+            type: 'warning'
+        });
+        if (!confirmed) {
             return;
         }
     }
@@ -214,15 +222,23 @@ function handleEditorChange() {
 }
 
 function scheduleAutoSave() {
+    // Check if auto-save is enabled
+    if (!isAutoSaveEnabled()) {
+        return;
+    }
+
     // Clear existing timeout
     if (EditorState.autoSaveTimeout) {
         clearTimeout(EditorState.autoSaveTimeout);
     }
 
-    // Schedule new save in 500ms
+    // Get delay from settings
+    const delay = getAutoSaveDelay();
+
+    // Schedule new save with configured delay
     EditorState.autoSaveTimeout = setTimeout(() => {
         saveCurrentFile();
-    }, 500);
+    }, delay);
 }
 
 export function saveCurrentFile() {
@@ -252,7 +268,7 @@ export function saveCurrentFile() {
         console.log('✓ File saved:', tab.file.name);
     } catch (error) {
         console.error('Failed to save file:', error);
-        alert('Failed to save file: ' + error.message);
+        showError('Failed to save file: ' + error.message);
     }
 }
 
