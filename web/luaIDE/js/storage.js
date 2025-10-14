@@ -170,7 +170,8 @@ const products = {
             createdAt: productData.createdAt || getCurrentTimestamp(),
             modifiedAt: productData.modifiedAt || getCurrentTimestamp(),
             autocomplete: productData.autocomplete || [],
-            apiDocs: productData.apiDocs || ''
+            apiDocs: productData.apiDocs || '',
+            isSystem: productData.isSystem || false
         };
 
         if (!validateProduct(product)) {
@@ -223,6 +224,12 @@ const products = {
 
     // Delete product
     delete(id) {
+        // Check if product is a system product
+        const product = this.getById(id);
+        if (product && product.isSystem) {
+            throw new Error('Cannot delete system product. System products are built-in and protected.');
+        }
+
         // Check if any project uses this product
         const projectsUsingProduct = projects.getAll()
             .filter(p => p.productId === id);
@@ -248,6 +255,11 @@ const products = {
     export(id) {
         const product = this.getById(id);
         if (!product) throw new Error('Product not found');
+
+        // Don't allow exporting system products
+        if (product.isSystem) {
+            throw new Error('Cannot export system product. System products are built-in and should not be exported.');
+        }
 
         return JSON.stringify({
             type: 'LuaIDE_Product',

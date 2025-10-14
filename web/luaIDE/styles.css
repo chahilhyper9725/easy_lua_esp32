@@ -1582,3 +1582,83 @@ body.resizing .console-panel {
 .welcome-btn:hover {
     background-color: var(--vscode-accent-hover);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   CONTEXT MENU
+   ═══════════════════════════════════════════════════════════ */
+
+.context-menu {
+    position: fixed;
+    background-color: var(--vscode-bg-sidebar);
+    border: 1px solid var(--vscode-border);
+    border-radius: 4px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    padding: 4px 0;
+    min-width: 180px;
+    z-index: 10005;
+    animation: contextMenuFadeIn 0.15s ease;
+}
+
+@keyframes contextMenuFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.context-menu-item {
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    color: var(--vscode-text-primary);
+    font-size: 13px;
+    transition: background-color 0.2s;
+}
+
+.context-menu-item:hover {
+    background-color: var(--vscode-accent);
+    color: white;
+}
+
+.context-menu-item.disabled {
+    color: var(--vscode-text-disabled);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.context-menu-item.disabled:hover {
+    background-color: transparent;
+    color: var(--vscode-text-disabled);
+}
+
+.context-menu-icon {
+    font-size: 14px;
+    width: 16px;
+    text-align: center;
+}
+
+.context-menu-label {
+    flex: 1;
+}
+
+.context-menu-separator {
+    height: 1px;
+    background-color: var(--vscode-border);
+    margin: 4px 0;
+}
+
+/* Context menu item types */
+.context-menu-item[data-action="delete"] {
+    color: var(--vscode-error);
+}
+
+.context-menu-item[data-action="delete"]:hover:not(.disabled) {
+    background-color: var(--vscode-error);
+    color: white;
+}

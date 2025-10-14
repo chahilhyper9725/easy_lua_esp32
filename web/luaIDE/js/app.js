@@ -69,6 +69,10 @@ import {
     applySettings,
     getSettings
 } from './settings-manager.js';
+import {
+    initializeContextMenu,
+    showContextMenu
+} from './context-menu.js';
 
 // ═══════════════════════════════════════════════════════════
 // GLOBAL APPLICATION STATE
@@ -111,12 +115,77 @@ async function initializeIDE() {
         console.log('✓ Settings loaded');
 
         // Check if first run (no products exist)
-        const existingProducts = storage.products.getAll();
+        let existingProducts = storage.products.getAll();
         const existingProjects = storage.projects.getAll();
 
-        if (existingProducts.length === 0) {
-            console.log('📦 First run detected - creating default data...');
-            await createDefaultData();
+        // Clean up duplicates: Find all system products (by isSystem flag OR by name pattern)
+        const systemProducts = existingProducts.filter(p =>
+            p.isSystem || p.name.includes('ESP32 Basic') || p.name.includes('(System)')
+        );
+
+        if (systemProducts.length > 1) {
+            console.log(`⚠️ Found ${systemProducts.length} system product entries - cleaning up duplicates...`);
+
+            // Keep the first one with isSystem=true, or the first one if none have the flag
+            const keepProduct = systemProducts.find(p => p.isSystem) || systemProducts[0];
+
+            // Update it to have isSystem flag
+            if (!keepProduct.isSystem) {
+                storage.products.update(keepProduct.id, {
+                    isSystem: true,
+                    name: 'ESP32 Basic (System)'
+                });
+            }
+
+            // Delete all other duplicates
+            systemProducts.forEach(p => {
+                if (p.id !== keepProduct.id) {
+                    try {
+                        // Check if projects depend on this duplicate
+                        const dependentProjects = existingProjects.filter(proj => proj.productId === p.id);
+                        if (dependentProjects.length > 0) {
+                            // Reassign projects to the kept system product
+                            dependentProjects.forEach(proj => {
+                                storage.projects.update(proj.id, { productId: keepProduct.id });
+                            });
+                            console.log(`  ↪ Reassigned ${dependentProjects.length} projects from duplicate to kept system product`);
+                        }
+
+                        // Force delete the duplicate (temporarily remove isSystem flag)
+                        storage.products.update(p.id, { isSystem: false });
+                        storage.products.delete(p.id);
+                        console.log(`  ✓ Removed duplicate: ${p.name}`);
+                    } catch (err) {
+                        console.error(`  ✗ Failed to remove duplicate ${p.id}:`, err);
+                    }
+                }
+            });
+
+            // Refresh products list after cleanup
+            existingProducts = storage.products.getAll();
+            console.log(`✓ Cleanup complete - ${existingProducts.length} products remaining`);
+        }
+
+        // Ensure exactly one system product exists
+        const systemProduct = existingProducts.find(p => p.isSystem);
+        if (!systemProduct) {
+            console.log('📦 System product not found - creating ESP32 Basic...');
+            const esp32Product = storage.products.create(DEFAULT_ESP32_PRODUCT);
+            console.log('✓ ESP32 Basic (System) product created');
+
+            // If no projects exist, create example project
+            if (existingProjects.length === 0) {
+                console.log('Creating example project...');
+                const exampleProject = storage.projects.create({
+                    name: 'Blink Example',
+                    productId: esp32Product.id,
+                    files: [{
+                        name: 'main.lua',
+                        content: `-- LED Blink Example\n-- Blinks the built-in LED on pin 2\n\nlocal ledPin = 2\n\npinMode(ledPin, OUTPUT)\n\nfor i = 1, 10 do\n    print('Blink ' .. i)\n    digitalWrite(ledPin, HIGH)\n    delay(500)\n    digitalWrite(ledPin, LOW)\n    delay(500)\nend\n\nprint('Done!')\n`
+                    }]
+                });
+                console.log('✓ Example project created');
+            }
         } else {
             console.log(`✓ Found ${existingProducts.length} products and ${existingProjects.length} projects`);
         }
@@ -139,8 +208,9 @@ async function initializeIDE() {
 // ═══════════════════════════════════════════════════════════
 
 const DEFAULT_ESP32_PRODUCT = {
-    "name": "ESP32 Basic",
-    "description": "Standard ESP32 with Arduino-compatible API",
+    "name": "ESP32 Basic (System)",
+    "description": "Standard ESP32 with Arduino-compatible API - System Provided",
+    "isSystem": true,
     "autocomplete": [
         {"label": "pinMode", "kind": "Function", "insertText": "pinMode(${1:pin}, ${2:mode})", "documentation": "Configure pin mode (INPUT, OUTPUT, INPUT_PULLUP)", "detail": "pinMode(pin: number, mode: number)"},
         {"label": "digitalWrite", "kind": "Function", "insertText": "digitalWrite(${1:pin}, ${2:value})", "documentation": "Write digital value to pin (HIGH or LOW)", "detail": "digitalWrite(pin: number, value: number)"},
@@ -161,6 +231,18 @@ const DEFAULT_ESP32_PRODUCT = {
         {"label": "LOW", "kind": "Constant", "insertText": "LOW", "documentation": "Digital LOW value (0)"}
     ],
     "apiDocs": "# ESP32 Basic API\n\n## GPIO Functions\n\n**pinMode(pin, mode)** - Configure pin as INPUT, OUTPUT, or INPUT_PULLUP\n\n**digitalWrite(pin, value)** - Write HIGH or LOW to pin\n\n**digitalRead(pin)** - Read digital value from pin (returns HIGH or LOW)\n\n**analogRead(pin)** - Read analog value (0-4095)\n\n**analogWrite(pin, value)** - Write PWM value (0-255)\n\n## Time Functions\n\n**delay(ms)** - Delay execution in milliseconds\n\n**millis()** - Get milliseconds since boot\n\n**micros()** - Get microseconds since boot\n\n## Math Functions\n\n**map(value, fromLow, fromHigh, toLow, toHigh)** - Map value to range\n\n**constrain(value, min, max)** - Constrain value between bounds\n\n**random(max)** - Generate random number 0 to max-1\n\n## Console\n\n**print(message)** - Print to console\n\n## Constants\n\nOUTPUT, INPUT, INPUT_PULLUP, HIGH, LOW\n\n## Example\n\n```lua\npinMode(2, OUTPUT)\nfor i=1,10 do\n  digitalWrite(2, HIGH)\n  delay(500)\n  digitalWrite(2, LOW)\n  delay(500)\nend\n```"
+};
+
+// Default template for new custom products
+const DEFAULT_PRODUCT_TEMPLATE = {
+    "autocomplete": [
+        {"label": "init", "kind": "Function", "insertText": "init()", "documentation": "Initialize the device", "detail": "init()"},
+        {"label": "read", "kind": "Function", "insertText": "read(${1:address})", "documentation": "Read data from address", "detail": "read(address: number): number"},
+        {"label": "write", "kind": "Function", "insertText": "write(${1:address}, ${2:value})", "documentation": "Write value to address", "detail": "write(address: number, value: number)"},
+        {"label": "reset", "kind": "Function", "insertText": "reset()", "documentation": "Reset the device", "detail": "reset()"},
+        {"label": "status", "kind": "Function", "insertText": "status()", "documentation": "Get device status", "detail": "status(): number"}
+    ],
+    "apiDocs": "# Custom Product API\n\n## Basic Functions\n\n**init()** - Initialize the device\n\n**read(address)** - Read data from address\n\n**write(address, value)** - Write value to address\n\n**reset()** - Reset the device\n\n**status()** - Get device status\n\n## Usage Example\n\n```lua\ninit()\nlocal value = read(0x10)\nprint('Value: ' .. value)\nwrite(0x10, 255)\nreset()\n```\n\n## Notes\n\nThis is a template. Export this product and edit the JSON to add your custom functions and documentation."
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -278,6 +360,9 @@ async function initializeUI() {
     // Initialize notification system
     initializeNotifications();
 
+    // Initialize context menu
+    initializeContextMenu();
+
     // Initialize resize manager
     initializeResize();
 
@@ -367,6 +452,9 @@ function updateUI() {
 
     // Update API docs
     updateApiDocs();
+
+    // Update product export button state
+    updateProductExportButton();
 
     // Update editor (if initialized)
     // Will be implemented in Phase 2
@@ -459,19 +547,38 @@ function updateFileExplorer() {
 }
 
 function attachFileExplorerEvents() {
-    // File click handlers
+    // File click and context menu handlers
     document.querySelectorAll('.file-item').forEach(item => {
+        const fileId = item.getAttribute('data-file-id');
+
+        // Left click to open
         item.addEventListener('click', () => {
-            const fileId = item.getAttribute('data-file-id');
             openFile(AppState.activeProjectId, fileId);
+        });
+
+        // Right click for context menu
+        item.addEventListener('contextmenu', (e) => {
+            showContextMenu(e, 'file', item, {
+                projectId: AppState.activeProjectId,
+                fileId: fileId
+            });
         });
     });
 
-    // Project header click handlers
+    // Project header click and context menu handlers
     document.querySelectorAll('.project-header').forEach(header => {
+        const projectItem = header.closest('.project-item');
+        const projectId = projectItem.getAttribute('data-project-id');
+        const project = storage.projects.getById(projectId);
+
+        // Left click to switch
         header.addEventListener('click', () => {
-            const projectId = header.closest('.project-item').getAttribute('data-project-id');
             switchProject(projectId);
+        });
+
+        // Right click for context menu
+        header.addEventListener('contextmenu', (e) => {
+            showContextMenu(e, 'project', header, project);
         });
     });
 }
@@ -486,10 +593,12 @@ function updateProductsList() {
 
     products.forEach(product => {
         const isActive = product.id === AppState.activeProductId;
+        const isSystem = product.isSystem || false;
+        const systemBadge = isSystem ? ' 🔒' : '';
         html += `
             <div class="product-item ${isActive ? 'active' : ''}" data-product-id="${product.id}">
                 <span class="icon">${isActive ? '🟢' : '⚪'}</span>
-                <span class="name">${escapeHtml(product.name)}</span>
+                <span class="name">${escapeHtml(product.name)}${systemBadge}</span>
             </div>
         `;
     });
@@ -497,13 +606,24 @@ function updateProductsList() {
     html += '</div>';
     productsList.innerHTML = html;
 
-    // Attach click handlers
+    // Attach click and context menu handlers
     document.querySelectorAll('.product-item').forEach(item => {
+        const productId = item.getAttribute('data-product-id');
+        const product = storage.products.getById(productId);
+
+        // Left click to switch
         item.addEventListener('click', () => {
-            const productId = item.getAttribute('data-product-id');
             switchProduct(productId);
         });
+
+        // Right click for context menu
+        item.addEventListener('contextmenu', (e) => {
+            showContextMenu(e, 'product', item, product);
+        });
     });
+
+    // Update export button state based on active product
+    updateProductExportButton();
 }
 
 function updateApiDocs() {
@@ -570,12 +690,29 @@ function switchProduct(productId) {
     updateProductsList();
     updateApiDocs();
 
+    // Update export button state
+    updateProductExportButton();
+
     // Emit product:changed event for other modules to listen
     document.dispatchEvent(new CustomEvent('product:changed', {
         detail: { productId }
     }));
 
     console.log('✓ Switched to product:', product.name);
+}
+
+function updateProductExportButton() {
+    const exportButton = document.getElementById('btn-export-product');
+    if (!exportButton || !AppState.activeProductId) return;
+
+    const product = storage.products.getById(AppState.activeProductId);
+    if (product && product.isSystem) {
+        exportButton.disabled = true;
+        exportButton.title = 'Cannot export system products';
+    } else {
+        exportButton.disabled = false;
+        exportButton.title = 'Export Product';
+    }
 }
 
 function switchProject(projectId) {
@@ -993,7 +1130,27 @@ function attachEventListeners() {
     });
 
     document.getElementById('btn-new-product')?.addEventListener('click', () => {
-        showError('New Product (Phase 3 - Coming Soon)');
+        const name = prompt('Enter product name:');
+        if (name) {
+            try {
+                // Create product with default template (has example functions)
+                const product = storage.products.create({
+                    name: name,
+                    description: 'Custom product',
+                    isSystem: false,
+                    autocomplete: DEFAULT_PRODUCT_TEMPLATE.autocomplete,
+                    apiDocs: DEFAULT_PRODUCT_TEMPLATE.apiDocs.replace('Custom Product', name)
+                });
+
+                // Switch to the new product
+                switchProduct(product.id);
+                updateUI();
+
+                showSuccess(`Product "${name}" created with default template! Export and edit the JSON to customize.`);
+            } catch (error) {
+                showError('Failed to create product: ' + error.message);
+            }
+        }
     });
 
     document.getElementById('btn-import-product')?.addEventListener('click', () => {
@@ -1109,6 +1266,80 @@ function attachEventListeners() {
 
         // Clear the input
         e.target.value = '';
+    });
+
+    // Context menu event handlers
+    document.addEventListener('product:renamed', (e) => {
+        updateUI();
+    });
+
+    document.addEventListener('product:deleted', (e) => {
+        const { productId } = e.detail;
+
+        // If deleted product was active, switch to first available
+        if (AppState.activeProductId === productId) {
+            const products = storage.products.getAll();
+            if (products.length > 0) {
+                switchProduct(products[0].id);
+            } else {
+                AppState.activeProductId = null;
+            }
+        }
+
+        updateUI();
+    });
+
+    document.addEventListener('project:renamed', (e) => {
+        updateUI();
+    });
+
+    document.addEventListener('project:deleted', (e) => {
+        const { projectId } = e.detail;
+
+        // If deleted project was active, switch to first available
+        if (AppState.activeProjectId === projectId) {
+            const projects = storage.projects.getAll();
+            if (projects.length > 0) {
+                switchProject(projects[0].id);
+            } else {
+                AppState.activeProjectId = null;
+                AppState.activeFileId = null;
+                closeAllTabs();
+            }
+        }
+
+        updateUI();
+    });
+
+    document.addEventListener('file:renamed', (e) => {
+        updateUI();
+        // Reload editor to update tab name
+        if (AppState.activeProjectId && AppState.activeFileId) {
+            openFileInEditor(AppState.activeProjectId, AppState.activeFileId);
+        }
+    });
+
+    document.addEventListener('file:deleted', (e) => {
+        const { projectId, fileId } = e.detail;
+
+        // If deleted file was active, open the first file in project
+        if (AppState.activeFileId === fileId) {
+            const project = storage.projects.getById(projectId);
+            if (project && project.files.length > 0) {
+                openFile(projectId, project.files[0].id);
+            } else {
+                AppState.activeFileId = null;
+            }
+        }
+
+        updateUI();
+    });
+
+    document.addEventListener('file:created', (e) => {
+        const { projectId, fileId } = e.detail;
+        updateUI();
+        // Open the newly created file
+        openFile(projectId, fileId);
     });
 
     console.log('✓ Event listeners attached');

@@ -485,11 +485,26 @@ export function updateAutocomplete(productId) {
         detail: item.detail
     }));
 
-    // Add product-specific autocomplete if product is selected
+    // Always include system product (ESP32 Basic) autocomplete
+    const allProducts = storage.products.getAll();
+    const systemProduct = allProducts.find(p => p.isSystem);
+    let systemSuggestions = [];
+    if (systemProduct && systemProduct.autocomplete) {
+        systemSuggestions = systemProduct.autocomplete.map(item => ({
+            label: item.label,
+            kind: getMonacoKind(item.kind),
+            insertText: item.insertText,
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: item.documentation,
+            detail: item.detail
+        }));
+    }
+
+    // Add selected product-specific autocomplete if product is selected (and not system)
     let productSuggestions = [];
     if (productId) {
         const product = storage.products.getById(productId);
-        if (product && product.autocomplete) {
+        if (product && product.autocomplete && !product.isSystem) {
             productSuggestions = product.autocomplete.map(item => ({
                 label: item.label,
                 kind: getMonacoKind(item.kind),
@@ -498,14 +513,16 @@ export function updateAutocomplete(productId) {
                 documentation: item.documentation,
                 detail: item.detail
             }));
-            console.log(`✓ Autocomplete updated: ${stdlibSuggestions.length} stdlib + ${productSuggestions.length} product (${product.name})`);
+            console.log(`✓ Autocomplete updated: ${stdlibSuggestions.length} stdlib + ${systemSuggestions.length} system (ESP32) + ${productSuggestions.length} product (${product.name})`);
+        } else if (product && product.isSystem) {
+            console.log(`✓ Autocomplete updated: ${stdlibSuggestions.length} stdlib + ${systemSuggestions.length} system (ESP32)`);
         }
     } else {
-        console.log(`✓ Autocomplete updated: ${stdlibSuggestions.length} stdlib functions`);
+        console.log(`✓ Autocomplete updated: ${stdlibSuggestions.length} stdlib + ${systemSuggestions.length} system (ESP32)`);
     }
 
-    // Combine stdlib (always) + product-specific (if any)
-    const allSuggestions = [...stdlibSuggestions, ...productSuggestions];
+    // Combine stdlib (always) + system (always) + product-specific (if any)
+    const allSuggestions = [...stdlibSuggestions, ...systemSuggestions, ...productSuggestions];
 
     // Register Lua completion provider with combined autocomplete
     monaco.languages.registerCompletionItemProvider('lua', {
