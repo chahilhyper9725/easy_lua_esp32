@@ -1,26 +1,24 @@
 // ═══════════════════════════════════════════════════════════
-// Easy Lua ESP32 - Main Entry Point
+// System Initialization
+// Contains all setup code for the ESP32 Lua system
 // ═══════════════════════════════════════════════════════════
+
+#ifndef SYSTEM_INIT_H
+#define SYSTEM_INIT_H
 
 #include <Arduino.h>
-#include "system_init/system_init.h"
 
 // ═══════════════════════════════════════════════════════════
-// SETUP
+// SYSTEM INITIALIZATION
 // ═══════════════════════════════════════════════════════════
 
-void setup()
-{
-    // Initialize all subsystems
-    system_init();
-}
+// Initialize all subsystems (call from setup())
+void system_init();
 
-// ═══════════════════════════════════════════════════════════
-// LOOP
-// ═══════════════════════════════════════════════════════════
+// Individual initialization functions (can be called separately if needed)
+void system_init_serial();
+void system_init_lua();
+void system_init_ble();
+void system_init_events();
 
-void loop()
-{
-    // System runs on RTOS tasks, so loop can be minimal
-    delay(1);
-}
+#endif // SYSTEM_INIT_H
