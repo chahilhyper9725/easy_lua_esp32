@@ -878,8 +878,9 @@ function updateExecutionButtons(executing) {
         btnExecute.disabled = executing || !isConnected();
     }
 
+    // Stop button is always enabled when connected (stateless)
     if (btnStop) {
-        btnStop.disabled = !executing;
+        btnStop.disabled = !isConnected();
     }
 }
 
