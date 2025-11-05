@@ -7,6 +7,7 @@
 #include "core/event_msg.h"
 #include "comms/ble_comm.h"
 #include "utils/debug.h"
+#include "modules/file_transfer.h"
 
 // ═══════════════════════════════════════════════════════════
 // MODULE DECLARATIONS
@@ -164,22 +165,31 @@ void system_init_events()
     // Initialize event message system
     event_msg_init(onEventSend);
 
-    // Register event handlers
+    // Register Lua execution event handlers
     event_msg_on("test", onTestEvent);
     event_msg_on(EVENT_LUA_CODE_ADD, onLuaCodeAddEvent);
     event_msg_on(EVENT_LUA_CODE_CLEAR, onLuaCodeClearEvent);
     event_msg_on(EVENT_LUA_CODE_RUN, onLuaCodeRunEvent);
     event_msg_on(EVENT_LUA_CODE_STOP, onLuaCodeStopEvent);
-    event_msg_on("ping", ping); // No handler needed
+    event_msg_on("ping", ping);
     event_msg_on_unhandled(onUnhandledEvent);
 
+    // Initialize and register file transfer module
+    file_transfer_init();
+    file_transfer_register_handlers();
+
     LOG_INFO("SYSTEM", "✓ Event system ready");
-    LOG_INFO("SYSTEM", "  Registered events:");
+    LOG_INFO("SYSTEM", "  Registered Lua events:");
     LOG_INFO("SYSTEM", "    - test");
+    LOG_INFO("SYSTEM", "    - ping / pong");
     LOG_INFO("SYSTEM", "    - %s (add code chunk)", EVENT_LUA_CODE_ADD);
     LOG_INFO("SYSTEM", "    - %s (clear buffer)", EVENT_LUA_CODE_CLEAR);
     LOG_INFO("SYSTEM", "    - %s (run buffer)", EVENT_LUA_CODE_RUN);
     LOG_INFO("SYSTEM", "    - %s (stop execution)", EVENT_LUA_CODE_STOP);
+    LOG_INFO("SYSTEM", "  Registered File events:");
+    LOG_INFO("SYSTEM", "    - file_init, file_create, file_append, file_flush");
+    LOG_INFO("SYSTEM", "    - file_seek, file_close, file_read, file_delete");
+    LOG_INFO("SYSTEM", "    - file_list, file_info");
 }
 
 // ═══════════════════════════════════════════════════════════
