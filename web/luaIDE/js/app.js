@@ -836,10 +836,10 @@ function setupBLECallbacks() {
         printBLEError(errorMsg);
     });
 
-    // Lua execution stopped (goes to BLE Output tab in red)
+    // Lua execution stopped (goes to BLE Output tab)
     onLuaStop((stopMsg) => {
-        printToConsole('Lua execution stopped');
-        printBLEError('Lua execution stopped');
+        printToConsole(stopMsg);  // Print actual message from lua_result
+        printToBLE(stopMsg);       // Print to BLE Output tab
         updateExecutionButtons(false);
     });
 }
