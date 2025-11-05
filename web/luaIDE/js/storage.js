@@ -1,19 +1,13 @@
 // ═══════════════════════════════════════════════════════════
-// Lua IDE - Storage Manager
-// Complete localStorage implementation for IDE persistence
+// Lua IDE - IndexedDB Storage Manager
+// Complete IndexedDB implementation with binary asset support
 // ═══════════════════════════════════════════════════════════
 
-// ═══════════════════════════════════════════════════════════
-// STORAGE KEYS (Constants)
-// ═══════════════════════════════════════════════════════════
+const DB_NAME = 'LuaIDEDB';
+const DB_VERSION = 1;
 
-const KEYS = {
-    SETTINGS: 'IDE_SETTINGS',
-    PRODUCTS_INDEX: 'PRODUCTS_INDEX',
-    PRODUCT_PREFIX: 'PRODUCT_',
-    PROJECTS_INDEX: 'PROJECTS_INDEX',
-    PROJECT_PREFIX: 'PROJECT_'
-};
+// Database instance (initialized once)
+let dbInstance = null;
 
 // ═══════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
@@ -25,10 +19,6 @@ function generateUUID() {
         const v = c === 'x' ? r : (r & 0x3 | 0x8);
         return v.toString(16);
     });
-}
-
-function getCurrentTimestamp() {
-    return new Date().toISOString();
 }
 
 function validateProduct(product) {
@@ -44,77 +34,153 @@ function validateProject(project) {
     if (!project.id || typeof project.id !== 'string') return false;
     if (!project.name || typeof project.name !== 'string' || project.name.length === 0 || project.name.length > 50) return false;
     if (!project.productId || typeof project.productId !== 'string') return false;
-    if (!Array.isArray(project.files) || project.files.length === 0) return false;
     if (!project.createdAt || !project.modifiedAt) return false;
+    return true;
+}
 
-    // Validate all files
-    for (const file of project.files) {
-        if (!file.id || typeof file.id !== 'string') return false;
-        if (!file.name || typeof file.name !== 'string' || !file.name.endsWith('.lua')) return false;
-        if (typeof file.content !== 'string') return false;
-        if (!file.createdAt || !file.modifiedAt) return false;
-    }
-
-    // Validate activeFileId
-    if (project.activeFileId) {
-        const fileExists = project.files.some(f => f.id === project.activeFileId);
-        if (!fileExists) return false;
-    }
-
+function validateFile(file) {
+    if (!file.id || typeof file.id !== 'string') return false;
+    if (!file.projectId || typeof file.projectId !== 'string') return false;
+    if (!file.name || typeof file.name !== 'string' || !file.name.endsWith('.lua')) return false;
+    if (typeof file.content !== 'string') return false;
+    if (!file.createdAt || !file.modifiedAt) return false;
     return true;
 }
 
 // ═══════════════════════════════════════════════════════════
-// SETTINGS API
+// DATABASE INITIALIZATION
+// ═══════════════════════════════════════════════════════════
+
+async function initDB() {
+    if (dbInstance) return dbInstance;
+
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+        request.onerror = () => {
+            console.error('Failed to open database:', request.error);
+            reject(request.error);
+        };
+
+        request.onsuccess = () => {
+            dbInstance = request.result;
+            console.log('✓ IndexedDB initialized:', DB_NAME);
+            resolve(dbInstance);
+        };
+
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            console.log('Upgrading database schema...');
+
+            // Create object stores with indexes
+
+            // Settings store (singleton)
+            if (!db.objectStoreNames.contains('settings')) {
+                db.createObjectStore('settings', { keyPath: 'id' });
+                console.log('✓ Created settings store');
+            }
+
+            // Products store
+            if (!db.objectStoreNames.contains('products')) {
+                const productStore = db.createObjectStore('products', { keyPath: 'id' });
+                productStore.createIndex('name', 'name', { unique: false });
+                productStore.createIndex('isSystem', 'isSystem', { unique: false });
+                console.log('✓ Created products store');
+            }
+
+            // Projects store
+            if (!db.objectStoreNames.contains('projects')) {
+                const projectStore = db.createObjectStore('projects', { keyPath: 'id' });
+                projectStore.createIndex('name', 'name', { unique: false });
+                projectStore.createIndex('productId', 'productId', { unique: false });
+                projectStore.createIndex('modifiedAt', 'modifiedAt', { unique: false });
+                console.log('✓ Created projects store');
+            }
+
+            // Files store (NEW - normalized)
+            if (!db.objectStoreNames.contains('files')) {
+                const fileStore = db.createObjectStore('files', { keyPath: 'id' });
+                fileStore.createIndex('projectId', 'projectId', { unique: false });
+                fileStore.createIndex('name', 'name', { unique: false });
+                fileStore.createIndex('projectId_name', ['projectId', 'name'], { unique: true });
+                console.log('✓ Created files store');
+            }
+
+            // Assets store (NEW - binary files)
+            if (!db.objectStoreNames.contains('assets')) {
+                const assetStore = db.createObjectStore('assets', { keyPath: 'id' });
+                assetStore.createIndex('projectId', 'projectId', { unique: false });
+                assetStore.createIndex('type', 'type', { unique: false });
+                assetStore.createIndex('name', 'name', { unique: false });
+                console.log('✓ Created assets store');
+            }
+        };
+    });
+}
+
+// ═══════════════════════════════════════════════════════════
+// SETTINGS API (Singleton)
 // ═══════════════════════════════════════════════════════════
 
 const settings = {
-    get() {
-        const defaults = {
-            version: "1.0.0",
-            theme: "dark",
-            fontSize: 14,
-            lastActiveProjectId: null,
-            lastActiveProductId: null,
-            consoleSettings: {
-                timestamp: true,
-                autoClear: false,
-                fontSize: 13
-            },
-            editorSettings: {
-                minimap: true,
-                lineNumbers: true,
-                wordWrap: "off",
-                tabSize: 4
-            },
-            layoutSettings: {
-                sidebarWidth: 250,
-                apiDocsWidth: 300,
-                consoleHeight: 200
-            }
-        };
+    async get() {
+        const db = await initDB();
 
-        try {
-            const stored = localStorage.getItem(KEYS.SETTINGS);
-            return stored ? { ...defaults, ...JSON.parse(stored) } : defaults;
-        } catch (error) {
-            console.error('Error reading settings:', error);
-            return defaults;
-        }
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('settings', 'readonly');
+            const store = tx.objectStore('settings');
+            const request = store.get(1);
+
+            request.onsuccess = () => {
+                const defaults = {
+                    id: 1,
+                    version: "2.0.0",
+                    theme: "dark",
+                    fontSize: 14,
+                    lastActiveProjectId: null,
+                    lastActiveProductId: null,
+                    consoleSettings: {
+                        timestamp: true,
+                        autoClear: false,
+                        fontSize: 13
+                    },
+                    editorSettings: {
+                        minimap: true,
+                        lineNumbers: true,
+                        wordWrap: "off",
+                        tabSize: 4
+                    },
+                    layoutSettings: {
+                        sidebarWidth: 250,
+                        apiDocsWidth: 300,
+                        consoleHeight: 200
+                    }
+                };
+
+                const stored = request.result;
+                resolve(stored ? { ...defaults, ...stored } : defaults);
+            };
+
+            request.onerror = () => reject(request.error);
+        });
     },
 
-    set(newSettings) {
-        try {
-            localStorage.setItem(KEYS.SETTINGS, JSON.stringify(newSettings));
-        } catch (error) {
-            console.error('Error saving settings:', error);
-            throw new Error('Failed to save settings');
-        }
+    async set(newSettings) {
+        const db = await initDB();
+
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('settings', 'readwrite');
+            const store = tx.objectStore('settings');
+            const request = store.put({ ...newSettings, id: 1 });
+
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
     },
 
-    update(partial) {
-        const current = this.get();
-        this.set({ ...current, ...partial });
+    async update(partial) {
+        const current = await this.get();
+        await this.set({ ...current, ...partial });
     }
 };
 
@@ -123,173 +189,113 @@ const settings = {
 // ═══════════════════════════════════════════════════════════
 
 const products = {
-    // Get index array
-    _getIndex() {
-        try {
-            const stored = localStorage.getItem(KEYS.PRODUCTS_INDEX);
-            return stored ? JSON.parse(stored) : [];
-        } catch (error) {
-            console.error('Error reading products index:', error);
-            return [];
-        }
+    async getAll() {
+        const db = await initDB();
+
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('products', 'readonly');
+            const store = tx.objectStore('products');
+            const request = store.getAll();
+
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
     },
 
-    // Save index array
-    _saveIndex(index) {
-        try {
-            localStorage.setItem(KEYS.PRODUCTS_INDEX, JSON.stringify(index));
-        } catch (error) {
-            console.error('Error saving products index:', error);
-            throw new Error('Failed to save products index');
-        }
+    async getById(id) {
+        const db = await initDB();
+
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('products', 'readonly');
+            const store = tx.objectStore('products');
+            const request = store.get(id);
+
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => reject(request.error);
+        });
     },
 
-    // Get all products
-    getAll() {
-        const index = this._getIndex();
-        return index.map(id => this.getById(id)).filter(p => p !== null);
-    },
+    async create(productData) {
+        const db = await initDB();
 
-    // Get by ID
-    getById(id) {
-        try {
-            const stored = localStorage.getItem(KEYS.PRODUCT_PREFIX + id);
-            return stored ? JSON.parse(stored) : null;
-        } catch (error) {
-            console.error(`Error reading product ${id}:`, error);
-            return null;
-        }
-    },
-
-    // Create new product
-    create(productData) {
         const product = {
             id: productData.id || generateUUID(),
             name: productData.name,
             description: productData.description || '',
-            createdAt: productData.createdAt || getCurrentTimestamp(),
-            modifiedAt: productData.modifiedAt || getCurrentTimestamp(),
+            isSystem: productData.isSystem || false,
             autocomplete: productData.autocomplete || [],
             apiDocs: productData.apiDocs || '',
-            isSystem: productData.isSystem || false
+            createdAt: productData.createdAt || Date.now(),
+            modifiedAt: productData.modifiedAt || Date.now()
         };
 
         if (!validateProduct(product)) {
             throw new Error('Invalid product data');
         }
 
-        try {
-            // Save product
-            localStorage.setItem(KEYS.PRODUCT_PREFIX + product.id, JSON.stringify(product));
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('products', 'readwrite');
+            const store = tx.objectStore('products');
+            const request = store.add(product);
 
-            // Update index
-            const index = this._getIndex();
-            if (!index.includes(product.id)) {
-                index.push(product.id);
-                this._saveIndex(index);
-            }
-
-            return product;
-        } catch (error) {
-            console.error('Error creating product:', error);
-            throw new Error('Failed to create product');
-        }
+            request.onsuccess = () => resolve(product);
+            request.onerror = () => {
+                console.error('Failed to create product:', request.error);
+                reject(new Error('Failed to create product'));
+            };
+        });
     },
 
-    // Update existing product
-    update(id, updates) {
-        const product = this.getById(id);
+    async update(id, updates) {
+        const db = await initDB();
+        const product = await this.getById(id);
         if (!product) throw new Error('Product not found');
 
         const updated = {
             ...product,
             ...updates,
-            id: product.id, // Don't allow ID change
-            createdAt: product.createdAt, // Don't allow createdAt change
-            modifiedAt: getCurrentTimestamp()
+            id: product.id,
+            createdAt: product.createdAt,
+            modifiedAt: Date.now()
         };
 
         if (!validateProduct(updated)) {
             throw new Error('Invalid product data');
         }
 
-        try {
-            localStorage.setItem(KEYS.PRODUCT_PREFIX + id, JSON.stringify(updated));
-            return updated;
-        } catch (error) {
-            console.error('Error updating product:', error);
-            throw new Error('Failed to update product');
-        }
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('products', 'readwrite');
+            const store = tx.objectStore('products');
+            const request = store.put(updated);
+
+            request.onsuccess = () => resolve(updated);
+            request.onerror = () => reject(request.error);
+        });
     },
 
-    // Delete product
-    delete(id) {
-        // Check if product is a system product
-        const product = this.getById(id);
-        if (product && product.isSystem) {
-            throw new Error('Cannot delete system product. System products are built-in and protected.');
+    async delete(id) {
+        const db = await initDB();
+
+        // Check if product is system product
+        const product = await this.getById(id);
+        if (product?.isSystem) {
+            throw new Error('Cannot delete system product');
         }
 
-        // Check if any project uses this product
-        const projectsUsingProduct = projects.getAll()
-            .filter(p => p.productId === id);
-
-        if (projectsUsingProduct.length > 0) {
-            throw new Error(`Cannot delete product: ${projectsUsingProduct.length} projects depend on it`);
+        // Check if any projects depend on this product
+        const dependentProjects = await projects.getByProductId(id);
+        if (dependentProjects.length > 0) {
+            throw new Error(`Cannot delete product: ${dependentProjects.length} projects depend on it`);
         }
 
-        try {
-            // Remove from storage
-            localStorage.removeItem(KEYS.PRODUCT_PREFIX + id);
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('products', 'readwrite');
+            const store = tx.objectStore('products');
+            const request = store.delete(id);
 
-            // Update index
-            const index = this._getIndex().filter(pid => pid !== id);
-            this._saveIndex(index);
-        } catch (error) {
-            console.error('Error deleting product:', error);
-            throw new Error('Failed to delete product');
-        }
-    },
-
-    // Export product as JSON
-    export(id) {
-        const product = this.getById(id);
-        if (!product) throw new Error('Product not found');
-
-        // Don't allow exporting system products
-        if (product.isSystem) {
-            throw new Error('Cannot export system product. System products are built-in and should not be exported.');
-        }
-
-        return JSON.stringify({
-            type: 'LuaIDE_Product',
-            version: '1.0.0',
-            exportedAt: getCurrentTimestamp(),
-            data: product
-        }, null, 2);
-    },
-
-    // Import product from JSON
-    import(jsonString) {
-        try {
-            const imported = JSON.parse(jsonString);
-
-            // Validate format
-            if (imported.type !== 'LuaIDE_Product') {
-                throw new Error('Invalid product export format');
-            }
-
-            // Generate new ID to avoid conflicts
-            const productData = {
-                ...imported.data,
-                id: undefined // Will be generated in create()
-            };
-
-            return this.create(productData);
-        } catch (error) {
-            console.error('Error importing product:', error);
-            throw new Error('Failed to import product: ' + error.message);
-        }
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
     }
 };
 
@@ -298,52 +304,53 @@ const products = {
 // ═══════════════════════════════════════════════════════════
 
 const projects = {
-    // Get index array
-    _getIndex() {
-        try {
-            const stored = localStorage.getItem(KEYS.PROJECTS_INDEX);
-            return stored ? JSON.parse(stored) : [];
-        } catch (error) {
-            console.error('Error reading projects index:', error);
-            return [];
-        }
+    async getAll() {
+        const db = await initDB();
+
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('projects', 'readonly');
+            const store = tx.objectStore('projects');
+            const request = store.getAll();
+
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
     },
 
-    // Save index array
-    _saveIndex(index) {
-        try {
-            localStorage.setItem(KEYS.PROJECTS_INDEX, JSON.stringify(index));
-        } catch (error) {
-            console.error('Error saving projects index:', error);
-            throw new Error('Failed to save projects index');
-        }
+    async getById(id) {
+        const db = await initDB();
+
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('projects', 'readonly');
+            const store = tx.objectStore('projects');
+            const request = store.get(id);
+
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => reject(request.error);
+        });
     },
 
-    // Get all projects
-    getAll() {
-        const index = this._getIndex();
-        return index.map(id => this.getById(id)).filter(p => p !== null);
+    async getByProductId(productId) {
+        const db = await initDB();
+
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('projects', 'readonly');
+            const store = tx.objectStore('projects');
+            const index = store.index('productId');
+            const request = index.getAll(productId);
+
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
     },
 
-    // Get by ID
-    getById(id) {
-        try {
-            const stored = localStorage.getItem(KEYS.PROJECT_PREFIX + id);
-            return stored ? JSON.parse(stored) : null;
-        } catch (error) {
-            console.error(`Error reading project ${id}:`, error);
-            return null;
-        }
-    },
+    async create(projectData) {
+        const db = await initDB();
 
-    // Create new project
-    create(projectData) {
-        // Ensure product exists
+        // Validate product exists
         if (projectData.productId) {
-            const product = products.getById(projectData.productId);
-            if (!product) {
-                throw new Error('Product not found');
-            }
+            const product = await products.getById(projectData.productId);
+            if (!product) throw new Error('Product not found');
         }
 
         const project = {
@@ -351,324 +358,489 @@ const projects = {
             name: projectData.name,
             productId: projectData.productId,
             activeFileId: null,
-            createdAt: projectData.createdAt || getCurrentTimestamp(),
-            modifiedAt: projectData.modifiedAt || getCurrentTimestamp(),
-            files: []
+            createdAt: projectData.createdAt || Date.now(),
+            modifiedAt: projectData.modifiedAt || Date.now()
         };
-
-        // Add files if provided
-        if (projectData.files && Array.isArray(projectData.files)) {
-            project.files = projectData.files.map(fileData => ({
-                id: fileData.id || generateUUID(),
-                name: fileData.name.endsWith('.lua') ? fileData.name : fileData.name + '.lua',
-                content: fileData.content || '',
-                createdAt: fileData.createdAt || getCurrentTimestamp(),
-                modifiedAt: fileData.modifiedAt || getCurrentTimestamp()
-            }));
-        }
-
-        // If no files, create a default main.lua
-        if (project.files.length === 0) {
-            project.files.push({
-                id: generateUUID(),
-                name: 'main.lua',
-                content: '-- New Lua file\nprint("Hello World!")\n',
-                createdAt: getCurrentTimestamp(),
-                modifiedAt: getCurrentTimestamp()
-            });
-        }
-
-        // Set active file to the first file or the provided activeFileId
-        if (projectData.activeFileId && project.files.some(f => f.id === projectData.activeFileId)) {
-            project.activeFileId = projectData.activeFileId;
-        } else {
-            project.activeFileId = project.files[0].id;
-        }
 
         if (!validateProject(project)) {
             throw new Error('Invalid project data');
         }
 
-        try {
-            // Save project
-            localStorage.setItem(KEYS.PROJECT_PREFIX + project.id, JSON.stringify(project));
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(['projects', 'files'], 'readwrite');
+            const projectStore = tx.objectStore('projects');
+            const fileStore = tx.objectStore('files');
 
-            // Update index
-            const index = this._getIndex();
-            if (!index.includes(project.id)) {
-                index.push(project.id);
-                this._saveIndex(index);
-            }
+            // Add project
+            const addProjectRequest = projectStore.add(project);
 
-            return project;
-        } catch (error) {
-            console.error('Error creating project:', error);
-            throw new Error('Failed to create project');
-        }
+            addProjectRequest.onsuccess = async () => {
+                // Add files (if provided) or create default main.lua
+                const filesToCreate = projectData.files && projectData.files.length > 0
+                    ? projectData.files
+                    : [{
+                        name: 'main.lua',
+                        content: '-- New Lua file\nprint("Hello World!")\n'
+                    }];
+
+                let firstFileId = null;
+                let filesCreated = 0;
+
+                for (const fileData of filesToCreate) {
+                    const file = {
+                        id: fileData.id || generateUUID(),
+                        projectId: project.id,
+                        name: fileData.name.endsWith('.lua') ? fileData.name : fileData.name + '.lua',
+                        content: fileData.content || '',
+                        type: 'text/x-lua',
+                        size: (fileData.content || '').length,
+                        createdAt: fileData.createdAt || Date.now(),
+                        modifiedAt: fileData.modifiedAt || Date.now()
+                    };
+
+                    if (!firstFileId) firstFileId = file.id;
+
+                    const addFileRequest = fileStore.add(file);
+                    addFileRequest.onsuccess = () => {
+                        filesCreated++;
+                        if (filesCreated === filesToCreate.length) {
+                            // All files added, update project with activeFileId
+                            project.activeFileId = projectData.activeFileId || firstFileId;
+                            const updateProjectRequest = projectStore.put(project);
+                            updateProjectRequest.onsuccess = () => resolve(project);
+                            updateProjectRequest.onerror = () => reject(updateProjectRequest.error);
+                        }
+                    };
+                    addFileRequest.onerror = () => reject(addFileRequest.error);
+                }
+            };
+
+            addProjectRequest.onerror = () => reject(addProjectRequest.error);
+            tx.onerror = () => reject(tx.error);
+        });
     },
 
-    // Update existing project
-    update(id, updates) {
-        const project = this.getById(id);
+    async update(id, updates) {
+        const db = await initDB();
+        const project = await this.getById(id);
         if (!project) throw new Error('Project not found');
 
         const updated = {
             ...project,
             ...updates,
-            id: project.id, // Don't allow ID change
-            createdAt: project.createdAt, // Don't allow createdAt change
-            modifiedAt: getCurrentTimestamp()
+            id: project.id,
+            createdAt: project.createdAt,
+            modifiedAt: Date.now()
         };
 
         if (!validateProject(updated)) {
             throw new Error('Invalid project data');
         }
 
-        try {
-            localStorage.setItem(KEYS.PROJECT_PREFIX + id, JSON.stringify(updated));
-            return updated;
-        } catch (error) {
-            console.error('Error updating project:', error);
-            throw new Error('Failed to update project');
-        }
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('projects', 'readwrite');
+            const store = tx.objectStore('projects');
+            const request = store.put(updated);
+
+            request.onsuccess = () => resolve(updated);
+            request.onerror = () => reject(request.error);
+        });
     },
 
-    // Delete project
-    delete(id) {
-        try {
-            // Remove from storage
-            localStorage.removeItem(KEYS.PROJECT_PREFIX + id);
+    async delete(id) {
+        const db = await initDB();
 
-            // Update index
-            const index = this._getIndex().filter(pid => pid !== id);
-            this._saveIndex(index);
-        } catch (error) {
-            console.error('Error deleting project:', error);
-            throw new Error('Failed to delete project');
-        }
+        return new Promise(async (resolve, reject) => {
+            try {
+                // Get all files to delete
+                const filesToDelete = await files.getByProjectId(id);
+
+                // Get all assets to delete
+                const assetsToDelete = await assets.getByProjectId(id);
+
+                const tx = db.transaction(['projects', 'files', 'assets'], 'readwrite');
+                const projectStore = tx.objectStore('projects');
+                const fileStore = tx.objectStore('files');
+                const assetStore = tx.objectStore('assets');
+
+                // Delete project
+                projectStore.delete(id);
+
+                // Delete all files
+                for (const file of filesToDelete) {
+                    fileStore.delete(file.id);
+                }
+
+                // Delete all assets
+                for (const asset of assetsToDelete) {
+                    assetStore.delete(asset.id);
+                }
+
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            } catch (error) {
+                reject(error);
+            }
+        });
     },
 
-    // Export project as JSON
-    export(id) {
-        const project = this.getById(id);
+    async setActiveFile(projectId, fileId) {
+        const db = await initDB();
+        const project = await this.getById(projectId);
         if (!project) throw new Error('Project not found');
 
-        return JSON.stringify({
-            type: 'LuaIDE_Project',
-            version: '1.0.0',
-            exportedAt: getCurrentTimestamp(),
-            data: project
-        }, null, 2);
-    },
-
-    // Import project from JSON
-    import(jsonString) {
-        try {
-            const imported = JSON.parse(jsonString);
-
-            // Validate format
-            if (imported.type !== 'LuaIDE_Project') {
-                throw new Error('Invalid project export format');
-            }
-
-            // Generate new ID to avoid conflicts
-            const projectData = {
-                ...imported.data,
-                id: undefined // Will be generated in create()
-            };
-
-            return this.create(projectData);
-        } catch (error) {
-            console.error('Error importing project:', error);
-            throw new Error('Failed to import project: ' + error.message);
+        const file = await files.getById(fileId);
+        if (!file || file.projectId !== projectId) {
+            throw new Error('File not found in this project');
         }
+
+        project.activeFileId = fileId;
+        project.modifiedAt = Date.now();
+
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('projects', 'readwrite');
+            const store = tx.objectStore('projects');
+            const request = store.put(project);
+
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
     },
 
-    // ─────────────────────────────────────────────────────────────
-    // FILE OPERATIONS
-    // ─────────────────────────────────────────────────────────────
+    // Legacy compatibility - get file through project
+    async getFile(projectId, fileId) {
+        return await files.getById(fileId);
+    },
 
-    addFile(projectId, fileData) {
-        const project = this.getById(projectId);
+    // Legacy compatibility - add file
+    async addFile(projectId, fileData) {
+        return await files.create({ ...fileData, projectId });
+    },
+
+    // Legacy compatibility - update file
+    async updateFile(projectId, fileId, content) {
+        return await files.update(fileId, { content });
+    },
+
+    // Legacy compatibility - rename file
+    async renameFile(projectId, fileId, newName) {
+        return await files.rename(fileId, newName);
+    },
+
+    // Legacy compatibility - delete file
+    async deleteFile(projectId, fileId) {
+        return await files.delete(fileId);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════
+// FILES API (NEW - Normalized)
+// ═══════════════════════════════════════════════════════════
+
+const files = {
+    async getAll() {
+        const db = await initDB();
+
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('files', 'readonly');
+            const store = tx.objectStore('files');
+            const request = store.getAll();
+
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    },
+
+    async getById(id) {
+        const db = await initDB();
+
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('files', 'readonly');
+            const store = tx.objectStore('files');
+            const request = store.get(id);
+
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => reject(request.error);
+        });
+    },
+
+    async getByProjectId(projectId) {
+        const db = await initDB();
+
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('files', 'readonly');
+            const store = tx.objectStore('files');
+            const index = store.index('projectId');
+            const request = index.getAll(projectId);
+
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    },
+
+    async create(fileData) {
+        const db = await initDB();
+
+        // Validate project exists
+        const project = await projects.getById(fileData.projectId);
         if (!project) throw new Error('Project not found');
 
         const file = {
-            id: generateUUID(),
+            id: fileData.id || generateUUID(),
+            projectId: fileData.projectId,
             name: fileData.name.endsWith('.lua') ? fileData.name : fileData.name + '.lua',
             content: fileData.content || '-- New Lua file\n',
-            createdAt: getCurrentTimestamp(),
-            modifiedAt: getCurrentTimestamp()
+            type: 'text/x-lua',
+            size: (fileData.content || '').length,
+            createdAt: fileData.createdAt || Date.now(),
+            modifiedAt: fileData.modifiedAt || Date.now()
         };
 
-        project.files.push(file);
-        project.modifiedAt = getCurrentTimestamp();
+        if (!validateFile(file)) {
+            throw new Error('Invalid file data');
+        }
 
-        this.update(projectId, project);
-        return file;
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(['files', 'projects'], 'readwrite');
+            const fileStore = tx.objectStore('files');
+            const projectStore = tx.objectStore('projects');
+
+            const addFileRequest = fileStore.add(file);
+
+            addFileRequest.onsuccess = () => {
+                // Update project's modifiedAt
+                project.modifiedAt = Date.now();
+                const updateProjectRequest = projectStore.put(project);
+                updateProjectRequest.onsuccess = () => resolve(file);
+                updateProjectRequest.onerror = () => reject(updateProjectRequest.error);
+            };
+
+            addFileRequest.onerror = () => reject(addFileRequest.error);
+        });
     },
 
-    updateFile(projectId, fileId, content) {
-        const project = this.getById(projectId);
-        if (!project) throw new Error('Project not found');
-
-        const file = project.files.find(f => f.id === fileId);
+    async update(id, updates) {
+        const db = await initDB();
+        const file = await this.getById(id);
         if (!file) throw new Error('File not found');
 
-        file.content = content;
-        file.modifiedAt = getCurrentTimestamp();
-        project.modifiedAt = getCurrentTimestamp();
+        const updated = {
+            ...file,
+            ...updates,
+            id: file.id,
+            projectId: file.projectId,
+            createdAt: file.createdAt,
+            modifiedAt: Date.now(),
+            size: (updates.content !== undefined ? updates.content : file.content).length
+        };
 
-        this.update(projectId, project);
+        if (!validateFile(updated)) {
+            throw new Error('Invalid file data');
+        }
+
+        return new Promise(async (resolve, reject) => {
+            try {
+                const project = await projects.getById(file.projectId);
+
+                const tx = db.transaction(['files', 'projects'], 'readwrite');
+                const fileStore = tx.objectStore('files');
+                const projectStore = tx.objectStore('projects');
+
+                const updateFileRequest = fileStore.put(updated);
+
+                updateFileRequest.onsuccess = () => {
+                    if (project) {
+                        project.modifiedAt = Date.now();
+                        const updateProjectRequest = projectStore.put(project);
+                        updateProjectRequest.onsuccess = () => resolve(updated);
+                        updateProjectRequest.onerror = () => reject(updateProjectRequest.error);
+                    } else {
+                        resolve(updated);
+                    }
+                };
+
+                updateFileRequest.onerror = () => reject(updateFileRequest.error);
+            } catch (error) {
+                reject(error);
+            }
+        });
     },
 
-    renameFile(projectId, fileId, newName) {
-        const project = this.getById(projectId);
-        if (!project) throw new Error('Project not found');
-
-        const file = project.files.find(f => f.id === fileId);
+    async delete(id) {
+        const db = await initDB();
+        const file = await this.getById(id);
         if (!file) throw new Error('File not found');
 
-        // Ensure .lua extension
-        file.name = newName.endsWith('.lua') ? newName : newName + '.lua';
-        file.modifiedAt = getCurrentTimestamp();
-        project.modifiedAt = getCurrentTimestamp();
-
-        this.update(projectId, project);
-    },
-
-    deleteFile(projectId, fileId) {
-        const project = this.getById(projectId);
-        if (!project) throw new Error('Project not found');
-
-        // Don't allow deleting the last file
-        if (project.files.length === 1) {
+        // Check if this is the last file in project
+        const projectFiles = await this.getByProjectId(file.projectId);
+        if (projectFiles.length === 1) {
             throw new Error('Cannot delete the last file in a project');
         }
 
-        // Remove file
-        project.files = project.files.filter(f => f.id !== fileId);
+        return new Promise(async (resolve, reject) => {
+            try {
+                const project = await projects.getById(file.projectId);
 
-        // If deleted file was active, switch to first file
-        if (project.activeFileId === fileId) {
-            project.activeFileId = project.files[0].id;
-        }
+                const tx = db.transaction(['files', 'projects'], 'readwrite');
+                const fileStore = tx.objectStore('files');
+                const projectStore = tx.objectStore('projects');
 
-        project.modifiedAt = getCurrentTimestamp();
-        this.update(projectId, project);
+                const deleteFileRequest = fileStore.delete(id);
+
+                deleteFileRequest.onsuccess = () => {
+                    if (project) {
+                        // If deleted file was active, switch to first remaining file
+                        if (project.activeFileId === id) {
+                            const remainingFiles = projectFiles.filter(f => f.id !== id);
+                            project.activeFileId = remainingFiles[0]?.id || null;
+                        }
+                        project.modifiedAt = Date.now();
+                        const updateProjectRequest = projectStore.put(project);
+                        updateProjectRequest.onsuccess = () => resolve();
+                        updateProjectRequest.onerror = () => reject(updateProjectRequest.error);
+                    } else {
+                        resolve();
+                    }
+                };
+
+                deleteFileRequest.onerror = () => reject(deleteFileRequest.error);
+            } catch (error) {
+                reject(error);
+            }
+        });
     },
 
-    setActiveFile(projectId, fileId) {
-        const project = this.getById(projectId);
-        if (!project) throw new Error('Project not found');
-
-        const file = project.files.find(f => f.id === fileId);
+    async rename(id, newName) {
+        const file = await this.getById(id);
         if (!file) throw new Error('File not found');
 
-        project.activeFileId = fileId;
-        this.update(projectId, project);
-    },
-
-    getFile(projectId, fileId) {
-        const project = this.getById(projectId);
-        if (!project) return null;
-
-        return project.files.find(f => f.id === fileId) || null;
+        const updatedName = newName.endsWith('.lua') ? newName : newName + '.lua';
+        return await this.update(id, { name: updatedName });
     }
 };
 
 // ═══════════════════════════════════════════════════════════
-// BACKUP API
+// ASSETS API (NEW - Binary Files)
 // ═══════════════════════════════════════════════════════════
 
-const backup = {
-    // Export all IDE data
-    export() {
-        const data = {
-            type: 'LuaIDE_Backup',
-            version: '1.0.0',
-            exportedAt: getCurrentTimestamp(),
-            data: {
-                settings: settings.get(),
-                products: products.getAll(),
-                projects: projects.getAll()
-            }
+const assets = {
+    async getAll() {
+        const db = await initDB();
+
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('assets', 'readonly');
+            const store = tx.objectStore('assets');
+            const request = store.getAll();
+
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    },
+
+    async getById(id) {
+        const db = await initDB();
+
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('assets', 'readonly');
+            const store = tx.objectStore('assets');
+            const request = store.get(id);
+
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => reject(request.error);
+        });
+    },
+
+    async getByProjectId(projectId) {
+        const db = await initDB();
+
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('assets', 'readonly');
+            const store = tx.objectStore('assets');
+            const index = store.index('projectId');
+            const request = index.getAll(projectId);
+
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    },
+
+    async create(assetData) {
+        const db = await initDB();
+
+        // Validate project exists
+        const project = await projects.getById(assetData.projectId);
+        if (!project) throw new Error('Project not found');
+
+        const asset = {
+            id: assetData.id || generateUUID(),
+            projectId: assetData.projectId,
+            name: assetData.name,
+            type: assetData.type || 'application/octet-stream',
+            data: assetData.data,  // Blob
+            size: assetData.data.size,
+            thumbnail: assetData.thumbnail || null,
+            createdAt: assetData.createdAt || Date.now(),
+            modifiedAt: assetData.modifiedAt || Date.now()
         };
 
-        return JSON.stringify(data, null, 2);
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('assets', 'readwrite');
+            const store = tx.objectStore('assets');
+            const request = store.add(asset);
+
+            request.onsuccess = () => resolve(asset);
+            request.onerror = () => reject(request.error);
+        });
     },
 
-    // Import full backup
-    import(jsonString) {
-        try {
-            const imported = JSON.parse(jsonString);
+    async update(id, updates) {
+        const db = await initDB();
+        const asset = await this.getById(id);
+        if (!asset) throw new Error('Asset not found');
 
-            // Validate format
-            if (imported.type !== 'LuaIDE_Backup') {
-                throw new Error('Invalid backup format');
-            }
+        const updated = {
+            ...asset,
+            ...updates,
+            id: asset.id,
+            projectId: asset.projectId,
+            createdAt: asset.createdAt,
+            modifiedAt: Date.now(),
+            size: updates.data ? updates.data.size : asset.size
+        };
 
-            // Clear existing data
-            this.clear();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('assets', 'readwrite');
+            const store = tx.objectStore('assets');
+            const request = store.put(updated);
 
-            // Import settings
-            if (imported.data.settings) {
-                settings.set(imported.data.settings);
-            }
-
-            // Import products
-            if (imported.data.products) {
-                imported.data.products.forEach(product => {
-                    products.create(product);
-                });
-            }
-
-            // Import projects
-            if (imported.data.projects) {
-                imported.data.projects.forEach(project => {
-                    projects.create(project);
-                });
-            }
-        } catch (error) {
-            console.error('Error importing backup:', error);
-            throw new Error('Failed to import backup: ' + error.message);
-        }
+            request.onsuccess = () => resolve(updated);
+            request.onerror = () => reject(request.error);
+        });
     },
 
-    // Clear all IDE data
-    clear() {
-        try {
-            // Get all keys
-            const productsIndex = products._getIndex();
-            const projectsIndex = projects._getIndex();
+    async delete(id) {
+        const db = await initDB();
 
-            // Remove all products
-            productsIndex.forEach(id => {
-                localStorage.removeItem(KEYS.PRODUCT_PREFIX + id);
-            });
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('assets', 'readwrite');
+            const store = tx.objectStore('assets');
+            const request = store.delete(id);
 
-            // Remove all projects
-            projectsIndex.forEach(id => {
-                localStorage.removeItem(KEYS.PROJECT_PREFIX + id);
-            });
-
-            // Remove indices and settings
-            localStorage.removeItem(KEYS.PRODUCTS_INDEX);
-            localStorage.removeItem(KEYS.PROJECTS_INDEX);
-            localStorage.removeItem(KEYS.SETTINGS);
-        } catch (error) {
-            console.error('Error clearing data:', error);
-            throw new Error('Failed to clear data');
-        }
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
     }
 };
 
 // ═══════════════════════════════════════════════════════════
-// EXPORT STORAGE API
+// EXPORT PUBLIC API
 // ═══════════════════════════════════════════════════════════
 
 export const storage = {
+    initDB,
     settings,
     products,
     projects,
-    backup
+    files,
+    assets
 };

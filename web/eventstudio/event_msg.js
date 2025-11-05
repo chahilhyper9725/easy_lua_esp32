@@ -5,9 +5,18 @@
  * Compatible with ESP32 event_msg.cpp implementation
  *
  * Frame Format:
- *   [STX] [Stuffed Event Name] [US] [Stuffed Event Data] [EOT]
+ *   [SOH] [7-byte header] [STX] [Stuffed Event Name] [US] [Stuffed Event Data] [EOT]
+ *
+ * Header Format (7 bytes):
+ *   senderId (1 byte)
+ *   receiverId (1 byte)
+ *   senderGroupId (1 byte)
+ *   receiverGroupId (1 byte)
+ *   flags (1 byte)
+ *   messageId (2 bytes, big-endian MSB first)
  *
  * Control Characters:
+ *   SOH  = 0x01 (Start of Header)
  *   STX  = 0x02 (Start of Text)
  *   US   = 0x1F (Unit Separator - between name and data)
  *   EOT  = 0x04 (End of Transmission)
@@ -24,11 +33,18 @@
 // CONTROL CHARACTERS
 // ═══════════════════════════════════════════════════════
 
+const MSG_SOH = 0x01;      // Start of Header
 const MSG_STX = 0x02;      // Start of Text
 const MSG_US = 0x1F;       // Unit Separator
 const MSG_EOT = 0x04;      // End of Transmission
 const MSG_ESC = 0x1B;      // Escape
 const MSG_ESC_XOR = 0x20;  // XOR mask for stuffing
+
+// Header constants
+const MSG_HEADER_SIZE = 7;
+
+// Global message ID counter (auto-increments)
+let nextMessageId = 0;
 
 // ═══════════════════════════════════════════════════════
 // ENCODER (with byte stuffing)
@@ -62,7 +78,24 @@ function stuffByte(byte, output) {
 export function encodeEvent(name, data = null) {
     const output = [];
 
-    // Frame start
+    // Frame start - SOH
+    output.push(MSG_SOH);
+
+    // 7-byte header (fixed values)
+    output.push(1);  // senderId
+    output.push(0);  // receiverId
+    output.push(0);  // senderGroupId
+    output.push(0);  // receiverGroupId
+    output.push(0);  // flags
+
+    // messageId (16-bit, big-endian MSB first)
+    output.push((nextMessageId >> 8) & 0xFF);  // MSB
+    output.push(nextMessageId & 0xFF);         // LSB
+
+    // Increment message ID for next send
+    nextMessageId = (nextMessageId + 1) & 0xFFFF;  // Wrap at 16-bit
+
+    // Start of text
     output.push(MSG_STX);
 
     // Stuff event name (convert string to bytes)
@@ -104,10 +137,12 @@ export function encodeEvent(name, data = null) {
 // ═══════════════════════════════════════════════════════
 
 const DecoderState = {
-    IDLE: 0,        // Waiting for STX
-    READ_NAME: 1,   // Reading event name
-    READ_DATA: 2,   // Reading event data
-    ESCAPE: 3       // Next byte is escaped
+    IDLE: 0,          // Waiting for SOH
+    SKIP_HEADER: 1,   // Skipping 7-byte header
+    WAIT_STX: 2,      // Waiting for STX after header
+    READ_NAME: 3,     // Reading event name
+    READ_DATA: 4,     // Reading event data
+    ESCAPE: 5         // Next byte is escaped
 };
 
 export class EventDecoder {
@@ -116,6 +151,7 @@ export class EventDecoder {
         this.eventName = '';
         this.eventData = [];
         this.inNameSection = true;
+        this.headerBytesRead = 0;
         this.eventHandlers = new Map();
         this.unhandledHandler = null;
     }
@@ -147,6 +183,7 @@ export class EventDecoder {
         this.eventName = '';
         this.eventData = [];
         this.inNameSection = true;
+        this.headerBytesRead = 0;
     }
 
     /**
@@ -157,15 +194,44 @@ export class EventDecoder {
         switch (this.state) {
 
             // ─────────────────────────────────────────────────
-            // IDLE: Waiting for frame start
+            // IDLE: Waiting for frame start (SOH)
             // ─────────────────────────────────────────────────
             case DecoderState.IDLE:
+                if (byte === MSG_SOH) {
+                    // Frame started - prepare to skip header
+                    this.headerBytesRead = 0;
+                    this.state = DecoderState.SKIP_HEADER;
+                }
+                break;
+
+            // ─────────────────────────────────────────────────
+            // SKIP_HEADER: Skip 7-byte header
+            // ─────────────────────────────────────────────────
+            case DecoderState.SKIP_HEADER:
+                this.headerBytesRead++;
+                if (this.headerBytesRead >= MSG_HEADER_SIZE) {
+                    // All 7 header bytes skipped, now wait for STX
+                    this.state = DecoderState.WAIT_STX;
+                }
+                break;
+
+            // ─────────────────────────────────────────────────
+            // WAIT_STX: Waiting for STX after header
+            // ─────────────────────────────────────────────────
+            case DecoderState.WAIT_STX:
                 if (byte === MSG_STX) {
-                    // Frame started - reset state
+                    // STX found - reset state and start reading name
                     this.eventName = '';
                     this.eventData = [];
                     this.inNameSection = true;
                     this.state = DecoderState.READ_NAME;
+                } else if (byte === MSG_SOH) {
+                    // New frame started - restart
+                    this.headerBytesRead = 0;
+                    this.state = DecoderState.SKIP_HEADER;
+                } else {
+                    // Unexpected byte - reset to idle
+                    this.reset();
                 }
                 break;
 
@@ -180,9 +246,15 @@ export class EventDecoder {
                     // Name complete, start reading data
                     this.inNameSection = false;
                     this.state = DecoderState.READ_DATA;
+                } else if (byte === MSG_SOH) {
+                    // New frame started - restart from beginning
+                    this.headerBytesRead = 0;
+                    this.state = DecoderState.SKIP_HEADER;
                 } else if (byte === MSG_STX) {
-                    // Unexpected STX - restart frame
-                    this.reset();
+                    // Unexpected STX - restart frame parsing (already past header)
+                    this.eventName = '';
+                    this.eventData = [];
+                    this.inNameSection = true;
                     this.state = DecoderState.READ_NAME;
                 } else {
                     // Normal character - add to name
@@ -201,9 +273,15 @@ export class EventDecoder {
                     // Frame complete - dispatch to registered handler
                     this._dispatchEvent();
                     this.reset();
+                } else if (byte === MSG_SOH) {
+                    // New frame started - restart from beginning
+                    this.headerBytesRead = 0;
+                    this.state = DecoderState.SKIP_HEADER;
                 } else if (byte === MSG_STX) {
-                    // Unexpected STX - restart frame
-                    this.reset();
+                    // Unexpected STX - restart frame parsing (already past header)
+                    this.eventName = '';
+                    this.eventData = [];
+                    this.inNameSection = true;
                     this.state = DecoderState.READ_NAME;
                 } else {
                     // Normal data byte - add to data

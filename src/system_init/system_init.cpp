@@ -23,18 +23,30 @@ extern void arduino_module_register(lua_State *L);
 static void onLuaError(const char *error_msg)
 {
     LOG_ERROR("LUA", "Lua error: %s", error_msg);
-    event_msg_send("lua_error", (const uint8_t *)error_msg, strlen(error_msg));
+    event_msg_send(EVENT_LUA_ERROR, (const uint8_t *)error_msg, strlen(error_msg));
 }
 
 static void onLuaStop()
 {
     LOG_INFO("LUA", "Lua execution finished");
-    event_msg_send("lua_stop", nullptr, 0);
+    // Send result event with success status
+    const char *result = "Lua execution finished";
+
+    event_msg_send(EVENT_LUA_RESULT, (const uint8_t *)result, strlen(result));
+      result = "Lua execution stopped";
+    event_msg_send(EVENT_LUA_CODE_STOP, (const uint8_t *)result, strlen(result));
 }
 
 // ═══════════════════════════════════════════════════════════
 // EVENT HANDLERS
 // ═══════════════════════════════════════════════════════════
+
+// Simple ping handler
+static void ping(const std::vector<uint8_t> &data)
+{
+    event_msg_send("pong", data.data(), data.size());
+    LOG_DEBUG("EVENT", "Ping event received! with Data %d bytes", data.size());
+}
 
 // Handler for "test" event
 static void onTestEvent(const std::vector<uint8_t> &data)
@@ -42,29 +54,48 @@ static void onTestEvent(const std::vector<uint8_t> &data)
     LOG_DEBUG("EVENT", "Test event received! Data size: %d bytes", data.size());
 }
 
-// Handler for "lua_stop" event
-static void onLuaStopEvent(const std::vector<uint8_t> &data)
+// Handler for "lua_code_add" event - Append code to buffer
+static void onLuaCodeAddEvent(const std::vector<uint8_t> &data)
 {
-    LOG_DEBUG("EVENT", "Lua stop event received");
-    lua_engine_stop();
-}
+    LOG_DEBUG("EVENT", "Lua code add event received (%d bytes)", data.size());
 
-// Handler for "lua_execute" event
-static void onLuaExecuteEvent(const std::vector<uint8_t> &data)
-{
-    LOG_DEBUG("EVENT", "Lua execute event received");
-
-    // Convert data to string (Lua code)
+    // Convert data to string (Lua code chunk)
     String code = "";
     for (uint8_t byte : data)
     {
         code += (char)byte;
     }
 
-    LOG_DEBUG("EVENT", "Executing Lua code (%d bytes)", code.length());
+    // Add to buffer
+    lua_engine_add_code(code.c_str());
+    event_msg_send(EVENT_LUA_RESULT, (const uint8_t *)"code added", strlen("code added"));
+}
 
-    // Execute Lua code
-    lua_engine_execute(code.c_str());
+// Handler for "lua_code_clear" event - Clear code buffer
+static void onLuaCodeClearEvent(const std::vector<uint8_t> &data)
+{
+    (void)data; // Unused
+    LOG_DEBUG("EVENT", "Lua code clear event received");
+    lua_engine_clear_code();
+    event_msg_send(EVENT_LUA_RESULT, (const uint8_t *)"code cleared", strlen("code cleared"));
+}
+
+// Handler for "lua_code_run" event - Execute buffer
+static void onLuaCodeRunEvent(const std::vector<uint8_t> &data)
+{
+    (void)data; // Unused
+    LOG_DEBUG("EVENT", "Lua code run event received");
+    event_msg_send(EVENT_LUA_RESULT, (const uint8_t *)"code execution starting", strlen("code execution starting"));
+
+    lua_engine_run_buffer();
+}
+
+// Handler for "lua_code_stop" event - Stop execution
+static void onLuaCodeStopEvent(const std::vector<uint8_t> &data)
+{
+    (void)data; // Unused
+    LOG_DEBUG("EVENT", "Lua code stop event received");
+    lua_engine_stop();
 }
 
 // Wildcard handler for unhandled events
@@ -98,8 +129,7 @@ void system_init_lua()
 {
     LOG_INFO("SYSTEM", "Initializing Lua engine...");
 
-    // Initialize Lua engine (creates RTOS task internally)
-    lua_engine_init();
+    // flow --> Arduino module and Other modules --> lua callbacks -->Lua engine init
 
     // Initialize Arduino module
     arduino_module_init();
@@ -110,6 +140,9 @@ void system_init_lua()
     // Register Lua callbacks
     lua_engine_on_error(onLuaError);
     lua_engine_on_stop(onLuaStop);
+
+    // Initialize Lua engine (creates RTOS task internally)
+    lua_engine_init();
 
     LOG_INFO("SYSTEM", "✓ Lua engine ready");
 }
@@ -133,15 +166,20 @@ void system_init_events()
 
     // Register event handlers
     event_msg_on("test", onTestEvent);
-    event_msg_on("lua_execute", onLuaExecuteEvent);
-    event_msg_on("lua_stop", onLuaStopEvent);
+    event_msg_on(EVENT_LUA_CODE_ADD, onLuaCodeAddEvent);
+    event_msg_on(EVENT_LUA_CODE_CLEAR, onLuaCodeClearEvent);
+    event_msg_on(EVENT_LUA_CODE_RUN, onLuaCodeRunEvent);
+    event_msg_on(EVENT_LUA_CODE_STOP, onLuaCodeStopEvent);
+    event_msg_on("ping", ping); // No handler needed
     event_msg_on_unhandled(onUnhandledEvent);
 
     LOG_INFO("SYSTEM", "✓ Event system ready");
     LOG_INFO("SYSTEM", "  Registered events:");
     LOG_INFO("SYSTEM", "    - test");
-    LOG_INFO("SYSTEM", "    - lua_execute");
-    LOG_INFO("SYSTEM", "    - lua_stop");
+    LOG_INFO("SYSTEM", "    - %s (add code chunk)", EVENT_LUA_CODE_ADD);
+    LOG_INFO("SYSTEM", "    - %s (clear buffer)", EVENT_LUA_CODE_CLEAR);
+    LOG_INFO("SYSTEM", "    - %s (run buffer)", EVENT_LUA_CODE_RUN);
+    LOG_INFO("SYSTEM", "    - %s (stop execution)", EVENT_LUA_CODE_STOP);
 }
 
 // ═══════════════════════════════════════════════════════════

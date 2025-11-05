@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Easy_Lua is a PlatformIO-based embedded project that integrates Lua scripting into an M5Stack Core2 device (ESP32-based). The project embeds a Lua interpreter allowing dynamic script execution on the microcontroller.
+Easy_Lua is a PlatformIO-based embedded project that integrates Lua scripting into an M5Stack Core2 device (ESP32-based). The system enables dynamic Lua script execution via BLE, using an event-driven architecture with RTOS task management.
 
 ## Build and Development Commands
 
@@ -23,42 +23,121 @@ This is a PlatformIO project. Key commands:
 - **Framework**: Arduino
 - **Platform**: Espressif32
 
-### Lua Integration
-The project uses the arduino-lua library (https://github.com/mischief/arduino-lua.git) to embed a Lua 5.x interpreter.
+### System Architecture
 
-**Key implementation details**:
-- Global Lua state (`L`) is initialized in `setup()` and persists throughout runtime
-- Lua VM includes a debug hook (`debug_hook`) that calls `yield()` every 50,000 instructions to prevent ESP32 watchdog timer resets during long-running Lua scripts
-- Custom Lua functions are registered as globals (e.g., `millis()` exposes Arduino's `millis()` to Lua)
-- Standard Lua libraries are loaded via `luaL_openlibs()`
+The project uses a modular, layered architecture:
 
-### Code Structure
-- **src/main.cpp**: Main application entry point with Arduino setup()/loop() and Lua VM initialization
-- **include/**: Project header files (currently empty but intended for custom headers)
-- **lib/**: Custom libraries for the project
-- **test/**: Test files
+#### Core Systems (src/core/)
+1. **lua_engine.cpp/h**: Manages Lua VM lifecycle with RTOS task isolation
+   - Runs Lua execution on dedicated RTOS task (Core 1, 8KB stack)
+   - Fresh Lua state created for each execution (complete isolation between scripts)
+   - Debug hook calls `yield()` every 10 lines to prevent watchdog resets
+   - Module registration system for extending Lua API
+   - Callbacks for error/stop events
+   - Key functions: `lua_engine_init()`, `lua_engine_execute()`, `lua_engine_stop()`
 
-### Adding Custom Lua Functions
-To expose Arduino/ESP32 functions to Lua:
-1. Create a static C function with signature `int function_name(lua_State *L)`
-2. Use Lua C API to get arguments from stack and push return values
-3. Register in `setup()` using `lua_register(L, "lua_name", c_function_name)`
+2. **event_msg.cpp/h**: Binary-safe message framing protocol
+   - Frame format: `[SOH][7-byte header][STX][event_name][US][event_data][EOT]` with byte stuffing
+   - Control chars: SOH(0x01), STX(0x02), US(0x1F), EOT(0x04), ESC(0x1B)
+   - 7-byte header structure (sent only, ignored on receive):
+     * senderId (1 byte) = 1
+     * receiverId (1 byte) = 0
+     * senderGroupId (1 byte) = 0
+     * receiverGroupId (1 byte) = 0
+     * flags (1 byte) = 0
+     * messageId (2 bytes, big-endian MSB first) - auto-increments per send
+   - Event routing via registered handlers
+   - Used for BLE communication between ESP32 and web IDE
+   - Key functions: `event_msg_init()`, `event_msg_on()`, `event_msg_send()`, `event_msg_feed_bytes()`
 
-Example from main.cpp:
-```cpp
-static int lua_millis(lua_State *L) {
-    lua_pushinteger(L, millis());
-    return 1;
-}
-// In setup():
-lua_register(L, "millis", lua_millis);
+#### Communication Layer (src/comms/)
+- **ble_comm.cpp/h**: BLE UART service wrapper
+  - Nordic UART Service (NUS) implementation
+  - Device name: "ESP32_Lua"
+  - Integrates with event_msg protocol
+  - Key functions: `ble_comm_init()`, `ble_comm_send()`, `ble_comm_is_connected()`
+
+#### Modules (src/modules/)
+- **arduino_module.cpp/h**: Exposes Arduino API to Lua
+  - Time: `millis()`, `micros()`, `delay()`, `delayMicroseconds()`
+  - Digital I/O: `pinMode()`, `digitalWrite()`, `digitalRead()`
+  - Analog I/O: `analogRead()`, `analogWrite()`
+  - Math: `map()`, `constrain()`, `random()`, `randomSeed()`
+  - Debug: `print()` (sends to BLE via event_msg)
+  - Constants: `OUTPUT`, `INPUT`, `INPUT_PULLUP`, `HIGH`, `LOW`
+  - Modules self-register via `lua_engine_add_module(arduino_module_register)`
+
+#### System Initialization (src/system_init/)
+- **system_init.cpp/h**: Orchestrates startup sequence
+  - Serial (115200 baud) → Lua engine → BLE → Event system
+  - Registers event handlers: `lua_execute`, `lua_stop`, `test`
+  - Connects event_msg output to BLE transmission
+  - Connects Lua callbacks (error/stop) to event_msg events
+
+#### Utilities (src/utils/)
+- **debug.cpp/h**: Logging macros (`LOG_INFO`, `LOG_DEBUG`, `LOG_ERROR`)
+
+#### Main Entry (src/)
+- **main.cpp**: Minimal Arduino entry point
+  - Calls `system_init()` in `setup()`
+  - Empty `loop()` (system runs on RTOS tasks)
+
+### Communication Flow
+
+```
+Web IDE (BLE) → event_msg protocol → Event handlers → lua_engine_execute()
+                                                     ↓
+                                              Lua RTOS Task (Core 1)
+                                                     ↓
+                                          Arduino module functions
+                                                     ↓
+                                                print() calls
+                                                     ↓
+                                          event_msg_send("lua_print")
+                                                     ↓
+                                              BLE → Web IDE
 ```
 
-## Important Constraints
+### Event Protocol
 
-- **Watchdog timer**: The ESP32 watchdog will reset the device if code blocks for too long. The Lua debug hook mitigates this for Lua code, but C++ code must call `yield()` or `delay()` periodically in tight loops
-- **Memory**: ESP32 has limited RAM (~520KB total, less available). Large Lua scripts or memory allocations may cause crashes
-- **Serial communication**: Runs at 115200 baud (configured in setup())
+**Incoming Events (BLE → ESP32):**
+- `lua_execute`: Contains Lua code to execute (event_msg frame with code as payload)
+- `lua_stop`: Request to stop current execution
+- `test`: Debug/test event
+
+**Outgoing Events (ESP32 → BLE):**
+- `lua_print`: Output from Lua `print()` statements
+- `lua_error`: Lua execution errors
+- `lua_stop`: Execution completed or interrupted
+
+### Adding Custom Lua Functions
+
+To extend the Lua API:
+
+1. **Create a module file** in `src/modules/` (e.g., `my_module.cpp`)
+2. **Implement Lua C functions** with signature `int func(lua_State* L)`
+3. **Create registration function**:
+```cpp
+void my_module_register(lua_State* L) {
+    lua_register(L, "myFunction", lua_myFunction);
+}
+```
+4. **Add module to system_init.cpp**:
+```cpp
+extern void my_module_register(lua_State* L);
+// In system_init_lua():
+lua_engine_add_module(my_module_register);
+```
+
+Modules are re-registered automatically before each script execution (Lua state is reset after every run).
+
+### Important Constraints
+
+- **RTOS task isolation**: Lua runs on Core 1 with 8KB stack; adjust stack size in `lua_engine.cpp:123` if needed
+- **Watchdog timer**: Debug hook yields every 10 lines; avoid blocking operations in C++ code
+- **Memory**: ESP32 has ~520KB RAM; large scripts may cause OOM crashes
+- **Execution isolation**: Each script execution gets a fresh Lua state (no persistence between runs)
+- **BLE MTU**: Event messages chunked to fit BLE packet size (typically 480 bytes)
 
 ## Web-Based Lua IDE
 

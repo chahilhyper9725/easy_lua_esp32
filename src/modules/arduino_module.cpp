@@ -95,7 +95,7 @@ static int lua_analogWrite(lua_State* L) {
 // LUA FUNCTIONS - Serial/Debug
 // ───────────────────────────────────────────────────────
 
-// Prints message - sends as BLE event "lua_print"
+// Prints message - sends as BLE event "lua_code_output"
 static int lua_print(lua_State* L) {
     const char* msg = lua_tostring(L, 1);
     if (msg) {
@@ -103,7 +103,7 @@ static int lua_print(lua_State* L) {
         LOG_DEBUG("LUA_PRINT", "%s", msg);
 
         // Send as BLE event
-        event_msg_send("lua_print", (const uint8_t*)msg, strlen(msg));
+        event_msg_send(EVENT_LUA_OUTPUT, (const uint8_t*)msg, strlen(msg));
     }
     return 0;
 }

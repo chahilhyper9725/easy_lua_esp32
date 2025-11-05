@@ -6,6 +6,17 @@
 // LUA ENGINE - Simple Function-based API
 // ═══════════════════════════════════════════════════════
 
+// Event names for Lua execution
+#define EVENT_LUA_CODE_ADD "lua_code_add"
+#define EVENT_LUA_CODE_CLEAR "lua_code_clear"
+#define EVENT_LUA_CODE_RUN "lua_code_run"
+#define EVENT_LUA_CODE_STOP "lua_code_stop"
+#define EVENT_LUA_OUTPUT "lua_code_output"
+#define EVENT_LUA_ERROR "lua_error"
+#define EVENT_LUA_RESULT "lua_result"
+#define EVENT_LUA_RESULT "lua_result"
+
+
 // Callback types
 typedef void (*ModuleRegisterFunc)(lua_State* L);
 typedef void (*ErrorCallback)(const char* error_msg);
@@ -14,9 +25,15 @@ typedef void (*StopCallback)();
 // Initialize Lua engine (call once in setup)
 void lua_engine_init();
 
-// Execute Lua code string
+// Execute Lua code string (legacy - still supported)
 // Modules will be registered automatically before execution
 void lua_engine_execute(const char* code);
+
+// Code buffer management (new API)
+void lua_engine_add_code(const char* code);    // Append code to buffer (raw append)
+void lua_engine_clear_code();                   // Clear the code buffer
+void lua_engine_run_buffer();                   // Execute accumulated buffer
+const char* lua_engine_get_buffer();            // Get current buffer (for debugging)
 
 // Stop current Lua execution
 void lua_engine_stop();

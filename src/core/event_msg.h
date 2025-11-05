@@ -26,11 +26,15 @@
 // ═══════════════════════════════════════════════════════
 
 // Control characters
+#define MSG_SOH      0x01  // Start of Header
 #define MSG_STX      0x02  // Start of Text
 #define MSG_US       0x1F  // Unit Separator
 #define MSG_EOT      0x04  // End of Transmission
 #define MSG_ESC      0x1B  // Escape
 #define MSG_ESC_XOR  0x20  // XOR mask for stuffing
+
+// Header constants (7 bytes total)
+#define MSG_HEADER_SIZE 7
 
 // Callback for handling specific events
 typedef void (*EventHandler)(const std::vector<uint8_t>& data);

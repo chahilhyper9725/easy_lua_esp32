@@ -18,6 +18,9 @@ static String code_to_execute = "";
 static volatile bool is_running = false;
 static volatile bool stop_requested = false;
 
+// Code buffer for chunked code assembly
+static String code_buffer = "";
+
 // Callbacks
 static ErrorCallback error_callback = nullptr;
 static StopCallback stop_callback = nullptr;
@@ -129,6 +132,7 @@ void lua_engine_init() {
         &lua_task_handle,
         1
     );
+    
 
     LOG_INFO("LUA", "Engine initialized (RTOS task on Core 1)");
 }
@@ -164,6 +168,31 @@ void lua_engine_execute(const char* code) {
 
 void lua_engine_stop() {
     stop_requested = true;
+}
+
+// ═══════════════════════════════════════════════════════
+// CODE BUFFER MANAGEMENT
+// ═══════════════════════════════════════════════════════
+
+void lua_engine_add_code(const char* code) {
+    if (code != nullptr) {
+        code_buffer += code;  // Raw append
+        LOG_DEBUG("LUA", "Code added to buffer (%d bytes total)", code_buffer.length());
+    }
+}
+
+void lua_engine_clear_code() {
+    code_buffer = "";
+    LOG_DEBUG("LUA", "Code buffer cleared");
+}
+
+void lua_engine_run_buffer() {
+    LOG_DEBUG("LUA", "Running code buffer (%d bytes)", code_buffer.length());
+    lua_engine_execute(code_buffer.c_str());
+}
+
+const char* lua_engine_get_buffer() {
+    return code_buffer.c_str();
 }
 
 lua_State* lua_engine_get_state() {

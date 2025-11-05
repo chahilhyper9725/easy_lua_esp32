@@ -50,6 +50,8 @@ import {
 import {
     importProject,
     importProduct,
+    exportProject,
+    exportProduct,
     createFullBackup,
     restoreFromBackup
 } from './import-export.js';
@@ -110,13 +112,17 @@ async function initializeIDE() {
     console.log('🚀 Initializing Lua IDE...');
 
     try {
+        // Initialize database
+        await storage.initDB();
+        console.log('✓ Database initialized');
+
         // Load settings
-        AppState.settings = storage.settings.get();
+        AppState.settings = await storage.settings.get();
         console.log('✓ Settings loaded');
 
         // Check if first run (no products exist)
-        let existingProducts = storage.products.getAll();
-        const existingProjects = storage.projects.getAll();
+        let existingProducts = await storage.products.getAll();
+        const existingProjects = await storage.projects.getAll();
 
         // Clean up duplicates: Find all system products (by isSystem flag OR by name pattern)
         const systemProducts = existingProducts.filter(p =>
@@ -131,38 +137,38 @@ async function initializeIDE() {
 
             // Update it to have isSystem flag
             if (!keepProduct.isSystem) {
-                storage.products.update(keepProduct.id, {
+                await storage.products.update(keepProduct.id, {
                     isSystem: true,
                     name: 'ESP32 Basic (System)'
                 });
             }
 
             // Delete all other duplicates
-            systemProducts.forEach(p => {
+            for (const p of systemProducts) {
                 if (p.id !== keepProduct.id) {
                     try {
                         // Check if projects depend on this duplicate
                         const dependentProjects = existingProjects.filter(proj => proj.productId === p.id);
                         if (dependentProjects.length > 0) {
                             // Reassign projects to the kept system product
-                            dependentProjects.forEach(proj => {
-                                storage.projects.update(proj.id, { productId: keepProduct.id });
-                            });
+                            for (const proj of dependentProjects) {
+                                await storage.projects.update(proj.id, { productId: keepProduct.id });
+                            }
                             console.log(`  ↪ Reassigned ${dependentProjects.length} projects from duplicate to kept system product`);
                         }
 
                         // Force delete the duplicate (temporarily remove isSystem flag)
-                        storage.products.update(p.id, { isSystem: false });
-                        storage.products.delete(p.id);
+                        await storage.products.update(p.id, { isSystem: false });
+                        await storage.products.delete(p.id);
                         console.log(`  ✓ Removed duplicate: ${p.name}`);
                     } catch (err) {
                         console.error(`  ✗ Failed to remove duplicate ${p.id}:`, err);
                     }
                 }
-            });
+            }
 
             // Refresh products list after cleanup
-            existingProducts = storage.products.getAll();
+            existingProducts = await storage.products.getAll();
             console.log(`✓ Cleanup complete - ${existingProducts.length} products remaining`);
         }
 
@@ -170,13 +176,13 @@ async function initializeIDE() {
         const systemProduct = existingProducts.find(p => p.isSystem);
         if (!systemProduct) {
             console.log('📦 System product not found - creating ESP32 Basic...');
-            const esp32Product = storage.products.create(DEFAULT_ESP32_PRODUCT);
+            const esp32Product = await storage.products.create(DEFAULT_ESP32_PRODUCT);
             console.log('✓ ESP32 Basic (System) product created');
 
             // If no projects exist, create example project
             if (existingProjects.length === 0) {
                 console.log('Creating example project...');
-                const exampleProject = storage.projects.create({
+                const exampleProject = await storage.projects.create({
                     name: 'Blink Example',
                     productId: esp32Product.id,
                     files: [{
@@ -191,7 +197,7 @@ async function initializeIDE() {
         }
 
         // Restore last active selections
-        restoreLastActiveState();
+        await restoreLastActiveState();
 
         // Initialize UI
         initializeUI();
@@ -252,12 +258,12 @@ const DEFAULT_PRODUCT_TEMPLATE = {
 async function createDefaultData() {
     try {
         console.log('Creating default ESP32 product...');
-        const esp32Product = storage.products.create(DEFAULT_ESP32_PRODUCT);
+        const esp32Product = await storage.products.create(DEFAULT_ESP32_PRODUCT);
         console.log('✓ ESP32 Basic product created:', esp32Product.id);
 
         // Create example project
         console.log('Creating example project...');
-        const exampleProject = storage.projects.create({
+        const exampleProject = await storage.projects.create({
             name: 'Blink Example',
             productId: esp32Product.id,
             files: [
@@ -290,7 +296,7 @@ print('Done!')
         AppState.activeProjectId = exampleProject.id;
 
         // Save to settings
-        storage.settings.update({
+        await storage.settings.update({
             lastActiveProductId: esp32Product.id,
             lastActiveProjectId: exampleProject.id
         });
@@ -305,12 +311,12 @@ print('Done!')
 // STATE RESTORATION
 // ═══════════════════════════════════════════════════════════
 
-function restoreLastActiveState() {
-    const settings = storage.settings.get();
+async function restoreLastActiveState() {
+    const settings = await storage.settings.get();
 
     // Restore active product
     if (settings.lastActiveProductId) {
-        const product = storage.products.getById(settings.lastActiveProductId);
+        const product = await storage.products.getById(settings.lastActiveProductId);
         if (product) {
             AppState.activeProductId = settings.lastActiveProductId;
             console.log('✓ Restored active product:', product.name);
@@ -319,7 +325,7 @@ function restoreLastActiveState() {
 
     // Restore active project
     if (settings.lastActiveProjectId) {
-        const project = storage.projects.getById(settings.lastActiveProjectId);
+        const project = await storage.projects.getById(settings.lastActiveProjectId);
         if (project) {
             AppState.activeProjectId = settings.lastActiveProjectId;
             AppState.activeFileId = project.activeFileId;
@@ -329,17 +335,17 @@ function restoreLastActiveState() {
 
     // If no active selections, use first available
     if (!AppState.activeProductId) {
-        const products = storage.products.getAll();
+        const products = await storage.products.getAll();
         if (products.length > 0) {
             AppState.activeProductId = products[0].id;
         }
     }
 
     if (!AppState.activeProjectId) {
-        const projects = storage.projects.getAll();
+        const projects = await storage.projects.getAll();
         if (projects.length > 0) {
             AppState.activeProjectId = projects[0].id;
-            const project = storage.projects.getById(projects[0].id);
+            const project = await storage.projects.getById(projects[0].id);
             if (project) {
                 AppState.activeFileId = project.activeFileId;
             }
@@ -441,20 +447,20 @@ function showWelcomeIfFirstTime() {
     }
 }
 
-function updateUI() {
+async function updateUI() {
     // Update toolbar dropdowns
-    updateProductDropdown();
-    updateProjectDropdown();
+    await updateProductDropdown();
+    await updateProjectDropdown();
 
     // Update file explorer
-    updateFileExplorer();
-    updateProductsList();
+    await updateFileExplorer();
+    await updateProductsList();
 
     // Update API docs
-    updateApiDocs();
+    await updateApiDocs();
 
     // Update product export button state
-    updateProductExportButton();
+    await updateProductExportButton();
 
     // Update editor (if initialized)
     // Will be implemented in Phase 2
@@ -464,11 +470,11 @@ function updateUI() {
 // UI UPDATE FUNCTIONS (Placeholders for Phase 2)
 // ═══════════════════════════════════════════════════════════
 
-function updateProductDropdown() {
+async function updateProductDropdown() {
     const dropdown = document.getElementById('product-dropdown');
     if (!dropdown) return;
 
-    const products = storage.products.getAll();
+    const products = await storage.products.getAll();
     dropdown.innerHTML = '';
 
     products.forEach(product => {
@@ -480,11 +486,11 @@ function updateProductDropdown() {
     });
 }
 
-function updateProjectDropdown() {
+async function updateProjectDropdown() {
     const dropdown = document.getElementById('project-dropdown');
     if (!dropdown) return;
 
-    const projects = storage.projects.getAll();
+    const projects = await storage.projects.getAll();
     dropdown.innerHTML = '';
 
     projects.forEach(project => {
@@ -496,7 +502,7 @@ function updateProjectDropdown() {
     });
 }
 
-function updateFileExplorer() {
+async function updateFileExplorer() {
     const explorer = document.getElementById('file-explorer');
     if (!explorer) return;
 
@@ -506,11 +512,14 @@ function updateFileExplorer() {
         return;
     }
 
-    const project = storage.projects.getById(AppState.activeProjectId);
+    const project = await storage.projects.getById(AppState.activeProjectId);
     if (!project) {
         explorer.innerHTML = '<div class="explorer-placeholder">Project not found.</div>';
         return;
     }
+
+    // Get files for this project
+    const files = await storage.files.getByProjectId(AppState.activeProjectId);
 
     // Build file tree HTML for active project only
     let html = '<div class="explorer-content">';
@@ -524,7 +533,7 @@ function updateFileExplorer() {
             <div class="project-files">
     `;
 
-    project.files.forEach(file => {
+    files.forEach(file => {
         const isActiveFile = file.id === AppState.activeFileId;
         html += `
             <div class="file-item ${isActiveFile ? 'active' : ''}" data-file-id="${file.id}">
@@ -566,10 +575,10 @@ function attachFileExplorerEvents() {
     });
 
     // Project header click and context menu handlers
-    document.querySelectorAll('.project-header').forEach(header => {
+    document.querySelectorAll('.project-header').forEach(async (header) => {
         const projectItem = header.closest('.project-item');
         const projectId = projectItem.getAttribute('data-project-id');
-        const project = storage.projects.getById(projectId);
+        const project = await storage.projects.getById(projectId);
 
         // Left click to switch
         header.addEventListener('click', () => {
@@ -583,11 +592,11 @@ function attachFileExplorerEvents() {
     });
 }
 
-function updateProductsList() {
+async function updateProductsList() {
     const productsList = document.getElementById('products-list');
     if (!productsList) return;
 
-    const products = storage.products.getAll();
+    const products = await storage.products.getAll();
 
     let html = '<div class="products-content">';
 
@@ -607,9 +616,9 @@ function updateProductsList() {
     productsList.innerHTML = html;
 
     // Attach click and context menu handlers
-    document.querySelectorAll('.product-item').forEach(item => {
+    document.querySelectorAll('.product-item').forEach(async (item) => {
         const productId = item.getAttribute('data-product-id');
-        const product = storage.products.getById(productId);
+        const product = await storage.products.getById(productId);
 
         // Left click to switch
         item.addEventListener('click', () => {
@@ -626,7 +635,7 @@ function updateProductsList() {
     updateProductExportButton();
 }
 
-function updateApiDocs() {
+async function updateApiDocs() {
     const apiDocsContent = document.getElementById('api-docs-content');
     if (!apiDocsContent) return;
 
@@ -635,7 +644,7 @@ function updateApiDocs() {
         return;
     }
 
-    const product = storage.products.getById(AppState.activeProductId);
+    const product = await storage.products.getById(AppState.activeProductId);
     if (!product) {
         apiDocsContent.innerHTML = '<p class="docs-placeholder">Product not found.</p>';
         return;
@@ -670,8 +679,8 @@ function updateApiDocs() {
 // ACTION HANDLERS
 // ═══════════════════════════════════════════════════════════
 
-function switchProduct(productId) {
-    const product = storage.products.getById(productId);
+async function switchProduct(productId) {
+    const product = await storage.products.getById(productId);
     if (!product) {
         showError('Product not found');
         return;
@@ -680,7 +689,7 @@ function switchProduct(productId) {
     AppState.activeProductId = productId;
 
     // Save to settings
-    storage.settings.update({ lastActiveProductId: productId });
+    await storage.settings.update({ lastActiveProductId: productId });
 
     // Update autocomplete
     updateAutocomplete(productId);
@@ -701,11 +710,11 @@ function switchProduct(productId) {
     console.log('✓ Switched to product:', product.name);
 }
 
-function updateProductExportButton() {
+async function updateProductExportButton() {
     const exportButton = document.getElementById('btn-export-product');
     if (!exportButton || !AppState.activeProductId) return;
 
-    const product = storage.products.getById(AppState.activeProductId);
+    const product = await storage.products.getById(AppState.activeProductId);
     if (product && product.isSystem) {
         exportButton.disabled = true;
         exportButton.title = 'Cannot export system products';
@@ -715,8 +724,8 @@ function updateProductExportButton() {
     }
 }
 
-function switchProject(projectId) {
-    const project = storage.projects.getById(projectId);
+async function switchProject(projectId) {
+    const project = await storage.projects.getById(projectId);
     if (!project) {
         showError('Project not found');
         return;
@@ -732,7 +741,7 @@ function switchProject(projectId) {
     AppState.activeFileId = project.activeFileId;
 
     // Save to settings
-    storage.settings.update({ lastActiveProjectId: projectId });
+    await storage.settings.update({ lastActiveProjectId: projectId });
 
     // Update UI
     updateProjectDropdown();
@@ -751,15 +760,15 @@ function switchProject(projectId) {
     console.log('✓ Switched to project:', project.name);
 }
 
-function openFile(projectId, fileId) {
-    const file = storage.projects.getFile(projectId, fileId);
+async function openFile(projectId, fileId) {
+    const file = await storage.projects.getFile(projectId, fileId);
     if (!file) {
         showError('File not found');
         return;
     }
 
     AppState.activeFileId = fileId;
-    storage.projects.setActiveFile(projectId, fileId);
+    await storage.projects.setActiveFile(projectId, fileId);
 
     // Open in editor
     openFileInEditor(projectId, fileId);
@@ -1077,11 +1086,11 @@ function attachEventListeners() {
         }
     });
 
-    document.getElementById('btn-backup')?.addEventListener('click', () => {
+    document.getElementById('btn-backup')?.addEventListener('click', async () => {
         try {
-            const result = createFullBackup();
+            const result = await createFullBackup();
             showSuccess(result.message);
-            printToConsole(`✓ Backup created: ${result.stats.productCount} products, ${result.stats.projectCount} projects, ${result.stats.totalFiles} files`);
+            printToConsole(`✓ Backup created: ${result.stats.productCount} products, ${result.stats.projectCount} projects`);
         } catch (error) {
             showError('Failed to create backup: ' + error.message);
         }
@@ -1093,15 +1102,15 @@ function attachEventListeners() {
     });
 
     // File explorer buttons
-    document.getElementById('btn-new-project')?.addEventListener('click', () => {
+    document.getElementById('btn-new-project')?.addEventListener('click', async () => {
         const name = prompt('Enter project name:');
         if (name) {
             try {
-                const project = storage.projects.create({
+                const project = await storage.projects.create({
                     name: name,
                     productId: AppState.activeProductId
                 });
-                switchProject(project.id);
+                await switchProject(project.id);
                 showSuccess('Project created: ' + name);
             } catch (error) {
                 showError('Failed to create project: ' + error.message);
@@ -1114,27 +1123,25 @@ function attachEventListeners() {
         document.getElementById('file-input-import-project')?.click();
     });
 
-    document.getElementById('btn-export-project')?.addEventListener('click', () => {
+    document.getElementById('btn-export-project')?.addEventListener('click', async () => {
         if (!AppState.activeProjectId) {
             showError('No active project to export');
             return;
         }
         try {
-            const json = storage.projects.export(AppState.activeProjectId);
-            const project = storage.projects.getById(AppState.activeProjectId);
-            downloadFile(json, `${project.name}.json`, 'application/json');
-            showSuccess('Project exported!');
+            const result = await exportProject(AppState.activeProjectId);
+            showSuccess(result.message);
         } catch (error) {
             showError('Failed to export project: ' + error.message);
         }
     });
 
-    document.getElementById('btn-new-product')?.addEventListener('click', () => {
+    document.getElementById('btn-new-product')?.addEventListener('click', async () => {
         const name = prompt('Enter product name:');
         if (name) {
             try {
                 // Create product with default template (has example functions)
-                const product = storage.products.create({
+                const product = await storage.products.create({
                     name: name,
                     description: 'Custom product',
                     isSystem: false,
@@ -1143,7 +1150,7 @@ function attachEventListeners() {
                 });
 
                 // Switch to the new product
-                switchProduct(product.id);
+                await switchProduct(product.id);
                 updateUI();
 
                 showSuccess(`Product "${name}" created with default template! Export and edit the JSON to customize.`);
@@ -1158,16 +1165,14 @@ function attachEventListeners() {
         document.getElementById('file-input-import-product')?.click();
     });
 
-    document.getElementById('btn-export-product')?.addEventListener('click', () => {
+    document.getElementById('btn-export-product')?.addEventListener('click', async () => {
         if (!AppState.activeProductId) {
             showError('No active product to export');
             return;
         }
         try {
-            const json = storage.products.export(AppState.activeProductId);
-            const product = storage.products.getById(AppState.activeProductId);
-            downloadFile(json, `${product.name}.json`, 'application/json');
-            showSuccess('Product exported!');
+            const result = await exportProduct(AppState.activeProductId);
+            showSuccess(result.message);
         } catch (error) {
             showError('Failed to export product: ' + error.message);
         }
@@ -1183,7 +1188,7 @@ function attachEventListeners() {
     });
 
     // New file button (in projects panel)
-    document.getElementById('btn-new-file')?.addEventListener('click', () => {
+    document.getElementById('btn-new-file')?.addEventListener('click', async () => {
         if (!AppState.activeProjectId) {
             showError('No active project. Create a project first.');
             return;
@@ -1192,11 +1197,11 @@ function attachEventListeners() {
         const fileName = prompt('Enter file name (without .lua):');
         if (fileName) {
             try {
-                const file = storage.projects.addFile(AppState.activeProjectId, {
+                const file = await storage.projects.addFile(AppState.activeProjectId, {
                     name: fileName
                 });
-                updateFileExplorer();
-                openFile(AppState.activeProjectId, file.id);
+                await updateFileExplorer();
+                await openFile(AppState.activeProjectId, file.id);
                 showSuccess('File created: ' + file.name);
             } catch (error) {
                 showError('Failed to create file: ' + error.message);
@@ -1214,10 +1219,10 @@ function attachEventListeners() {
             showSuccess(result.message);
 
             // Refresh UI to show imported project
-            updateUI();
+            await updateUI();
 
             // Switch to imported project
-            switchProject(result.project.id);
+            await switchProject(result.project.id);
         } catch (error) {
             showError('Import failed: ' + error.message);
         }
@@ -1235,10 +1240,10 @@ function attachEventListeners() {
             showSuccess(result.message);
 
             // Refresh UI to show imported product
-            updateUI();
+            await updateUI();
 
             // Switch to imported product
-            switchProduct(result.product.id);
+            await switchProduct(result.product.id);
         } catch (error) {
             showError('Import failed: ' + error.message);
         }
@@ -1269,38 +1274,38 @@ function attachEventListeners() {
     });
 
     // Context menu event handlers
-    document.addEventListener('product:renamed', (e) => {
-        updateUI();
+    document.addEventListener('product:renamed', async (e) => {
+        await updateUI();
     });
 
-    document.addEventListener('product:deleted', (e) => {
+    document.addEventListener('product:deleted', async (e) => {
         const { productId } = e.detail;
 
         // If deleted product was active, switch to first available
         if (AppState.activeProductId === productId) {
-            const products = storage.products.getAll();
+            const products = await storage.products.getAll();
             if (products.length > 0) {
-                switchProduct(products[0].id);
+                await switchProduct(products[0].id);
             } else {
                 AppState.activeProductId = null;
             }
         }
 
-        updateUI();
+        await updateUI();
     });
 
-    document.addEventListener('project:renamed', (e) => {
-        updateUI();
+    document.addEventListener('project:renamed', async (e) => {
+        await updateUI();
     });
 
-    document.addEventListener('project:deleted', (e) => {
+    document.addEventListener('project:deleted', async (e) => {
         const { projectId } = e.detail;
 
         // If deleted project was active, switch to first available
         if (AppState.activeProjectId === projectId) {
-            const projects = storage.projects.getAll();
+            const projects = await storage.projects.getAll();
             if (projects.length > 0) {
-                switchProject(projects[0].id);
+                await switchProject(projects[0].id);
             } else {
                 AppState.activeProjectId = null;
                 AppState.activeFileId = null;
@@ -1308,38 +1313,38 @@ function attachEventListeners() {
             }
         }
 
-        updateUI();
+        await updateUI();
     });
 
-    document.addEventListener('file:renamed', (e) => {
-        updateUI();
+    document.addEventListener('file:renamed', async (e) => {
+        await updateUI();
         // Reload editor to update tab name
         if (AppState.activeProjectId && AppState.activeFileId) {
             openFileInEditor(AppState.activeProjectId, AppState.activeFileId);
         }
     });
 
-    document.addEventListener('file:deleted', (e) => {
+    document.addEventListener('file:deleted', async (e) => {
         const { projectId, fileId } = e.detail;
 
         // If deleted file was active, open the first file in project
         if (AppState.activeFileId === fileId) {
-            const project = storage.projects.getById(projectId);
-            if (project && project.files.length > 0) {
-                openFile(projectId, project.files[0].id);
+            const files = await storage.files.getByProjectId(projectId);
+            if (files.length > 0) {
+                await openFile(projectId, files[0].id);
             } else {
                 AppState.activeFileId = null;
             }
         }
 
-        updateUI();
+        await updateUI();
     });
 
-    document.addEventListener('file:created', (e) => {
+    document.addEventListener('file:created', async (e) => {
         const { projectId, fileId } = e.detail;
-        updateUI();
+        await updateUI();
         // Open the newly created file
-        openFile(projectId, fileId);
+        await openFile(projectId, fileId);
     });
 
     console.log('✓ Event listeners attached');

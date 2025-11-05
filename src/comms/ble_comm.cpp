@@ -13,6 +13,9 @@
 #define NUS_RX_UUID      "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"  // RX (Write from client)
 #define NUS_TX_UUID      "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"  // TX (Notify to client)
 
+// Product UUID
+#define PRODUCT_UUID     "AE06"  // Product identifier for advertisement
+
 // BLE Configuration
 #define BLE_MTU          517   // Requested MTU size
 #define BLE_CHUNK_SIZE   480   // Chunk size for sending (safe payload size)
@@ -112,6 +115,7 @@ void ble_comm_init(const char* device_name, BleReceiveCallback on_receive) {
     // Configure advertising
     BLEAdvertising* advertising = BLEDevice::getAdvertising();
     advertising->addServiceUUID(NUS_SERVICE_UUID);
+    advertising->addServiceUUID(PRODUCT_UUID);  // Add product UUID
     advertising->setScanResponse(true);
     advertising->setMinPreferred(0x06);  // iPhone compatibility
     advertising->setMinPreferred(0x12);
@@ -122,6 +126,7 @@ void ble_comm_init(const char* device_name, BleReceiveCallback on_receive) {
     LOG_INFO("BLE", "NUS Server started");
     LOG_DEBUG("BLE", "Device name: %s", device_name);
     LOG_DEBUG("BLE", "Service UUID: %s", NUS_SERVICE_UUID);
+    LOG_DEBUG("BLE", "Product UUID: %s", PRODUCT_UUID);
     LOG_DEBUG("BLE", "RX UUID (Write): %s", NUS_RX_UUID);
     LOG_DEBUG("BLE", "TX UUID (Notify): %s", NUS_TX_UUID);
     LOG_INFO("BLE", "Waiting for client connection...");

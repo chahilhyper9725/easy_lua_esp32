@@ -24,7 +24,8 @@ const EditorState = {
     editorModels: new Map(),      // Map of fileId -> Monaco model
     unsavedChanges: new Set(),    // Set of fileIds with unsaved changes
     autoSaveTimeout: null,
-    isInitialized: false
+    isInitialized: false,
+    completionProvider: null      // Disposable for autocomplete provider
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -86,8 +87,8 @@ export async function initializeEditor() {
 // TAB MANAGEMENT
 // ═══════════════════════════════════════════════════════════
 
-export function openFileInEditor(projectId, fileId) {
-    const file = storage.projects.getFile(projectId, fileId);
+export async function openFileInEditor(projectId, fileId) {
+    const file = await storage.projects.getFile(projectId, fileId);
     if (!file) {
         console.error('File not found:', fileId);
         return;
@@ -241,7 +242,7 @@ function scheduleAutoSave() {
     }, delay);
 }
 
-export function saveCurrentFile() {
+export async function saveCurrentFile() {
     if (EditorState.activeTabIndex === -1) return;
 
     const tab = EditorState.openTabs[EditorState.activeTabIndex];
@@ -254,7 +255,7 @@ export function saveCurrentFile() {
 
     try {
         // Save to storage
-        storage.projects.updateFile(tab.projectId, tab.fileId, content);
+        await storage.projects.updateFile(tab.projectId, tab.fileId, content);
 
         // Update tab reference
         tab.file.content = content;
@@ -474,7 +475,7 @@ export function setupKeyboardShortcuts() {
 // AUTOCOMPLETE INTEGRATION
 // ═══════════════════════════════════════════════════════════
 
-export function updateAutocomplete(productId) {
+export async function updateAutocomplete(productId) {
     // Always include Lua standard library autocomplete
     const stdlibSuggestions = LUA_STDLIB_AUTOCOMPLETE.map(item => ({
         label: item.label,
@@ -486,7 +487,7 @@ export function updateAutocomplete(productId) {
     }));
 
     // Always include system product (ESP32 Basic) autocomplete
-    const allProducts = storage.products.getAll();
+    const allProducts = await storage.products.getAll();
     const systemProduct = allProducts.find(p => p.isSystem);
     let systemSuggestions = [];
     if (systemProduct && systemProduct.autocomplete) {
@@ -503,7 +504,7 @@ export function updateAutocomplete(productId) {
     // Add selected product-specific autocomplete if product is selected (and not system)
     let productSuggestions = [];
     if (productId) {
-        const product = storage.products.getById(productId);
+        const product = await storage.products.getById(productId);
         if (product && product.autocomplete && !product.isSystem) {
             productSuggestions = product.autocomplete.map(item => ({
                 label: item.label,
@@ -524,10 +525,36 @@ export function updateAutocomplete(productId) {
     // Combine stdlib (always) + system (always) + product-specific (if any)
     const allSuggestions = [...stdlibSuggestions, ...systemSuggestions, ...productSuggestions];
 
-    // Register Lua completion provider with combined autocomplete
-    monaco.languages.registerCompletionItemProvider('lua', {
+    // Dispose old completion provider if exists
+    if (EditorState.completionProvider) {
+        EditorState.completionProvider.dispose();
+    }
+
+    // Register new Lua completion provider with combined autocomplete
+    EditorState.completionProvider = monaco.languages.registerCompletionItemProvider('lua', {
         provideCompletionItems: (model, position) => {
-            return { suggestions: allSuggestions };
+            // Get the word at the current position to determine range
+            const word = model.getWordUntilPosition(position);
+            const range = {
+                startLineNumber: position.lineNumber,
+                endLineNumber: position.lineNumber,
+                startColumn: word.startColumn,
+                endColumn: word.endColumn
+            };
+
+            // Extract symbols from current file content
+            const currentFileSuggestions = extractLuaSymbols(model.getValue());
+
+            // Combine all suggestions: stdlib + system + product + current file
+            const combinedSuggestions = [...allSuggestions, ...currentFileSuggestions];
+
+            // Add range to all suggestions
+            const suggestionsWithRange = combinedSuggestions.map(suggestion => ({
+                ...suggestion,
+                range: range
+            }));
+
+            return { suggestions: suggestionsWithRange };
         }
     });
 }
@@ -541,6 +568,90 @@ function getMonacoKind(kind) {
         'Snippet': monaco.languages.CompletionItemKind.Snippet
     };
     return kinds[kind] || monaco.languages.CompletionItemKind.Text;
+}
+
+// ═══════════════════════════════════════════════════════════
+// DYNAMIC SYMBOL EXTRACTION FROM CURRENT FILE
+// ═══════════════════════════════════════════════════════════
+
+function extractLuaSymbols(code) {
+    const suggestions = [];
+    const seenSymbols = new Set(); // Avoid duplicates
+
+    // Match function definitions: function name(...) or local function name(...)
+    const functionRegex = /(?:local\s+)?function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g;
+    let match;
+    while ((match = functionRegex.exec(code)) !== null) {
+        const funcName = match[1];
+        if (!seenSymbols.has(funcName)) {
+            seenSymbols.add(funcName);
+            suggestions.push({
+                label: funcName,
+                kind: monaco.languages.CompletionItemKind.Function,
+                insertText: funcName + '($0)',
+                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                documentation: 'User-defined function',
+                detail: '(from current file)'
+            });
+        }
+    }
+
+    // Match variable assignments: local varName = ... or varName = ...
+    const varRegex = /(?:local\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g;
+    while ((match = varRegex.exec(code)) !== null) {
+        const varName = match[1];
+        // Skip function names already added and common keywords
+        if (!seenSymbols.has(varName) && !['function', 'local', 'if', 'then', 'else', 'end', 'for', 'while', 'do', 'repeat', 'until', 'return'].includes(varName)) {
+            seenSymbols.add(varName);
+            suggestions.push({
+                label: varName,
+                kind: monaco.languages.CompletionItemKind.Variable,
+                insertText: varName,
+                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                documentation: 'User-defined variable',
+                detail: '(from current file)'
+            });
+        }
+    }
+
+    // Match table definitions: tableName = {} or local tableName = {}
+    const tableRegex = /(?:local\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*\{/g;
+    while ((match = tableRegex.exec(code)) !== null) {
+        const tableName = match[1];
+        if (!seenSymbols.has(tableName)) {
+            seenSymbols.add(tableName);
+            suggestions.push({
+                label: tableName,
+                kind: monaco.languages.CompletionItemKind.Class,
+                insertText: tableName,
+                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                documentation: 'User-defined table',
+                detail: '(from current file)'
+            });
+        }
+    }
+
+    // Match method definitions: table.method = function(...) or function table:method(...)
+    const methodRegex = /(?:function\s+)?([a-zA-Z_][a-zA-Z0-9_]*)[:.]([a-zA-Z_][a-zA-Z0-9_]*)/g;
+    while ((match = methodRegex.exec(code)) !== null) {
+        const tableName = match[1];
+        const methodName = match[2];
+        const fullName = `${tableName}.${methodName}`;
+
+        if (!seenSymbols.has(fullName)) {
+            seenSymbols.add(fullName);
+            suggestions.push({
+                label: fullName,
+                kind: monaco.languages.CompletionItemKind.Method,
+                insertText: fullName + '($0)',
+                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                documentation: 'User-defined method',
+                detail: '(from current file)'
+            });
+        }
+    }
+
+    return suggestions;
 }
 
 // ═══════════════════════════════════════════════════════════

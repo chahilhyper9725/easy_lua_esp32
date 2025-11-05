@@ -6,6 +6,18 @@
 import { encodeEvent, EventDecoder, toString } from './event_msg.js';
 
 // ═══════════════════════════════════════════════════════════
+// EVENT NAMES (must match ESP32 definitions)
+// ═══════════════════════════════════════════════════════════
+
+const EVENT_LUA_CODE_ADD = "lua_code_add";
+const EVENT_LUA_CODE_CLEAR = "lua_code_clear";
+const EVENT_LUA_CODE_RUN = "lua_code_run";
+const EVENT_LUA_CODE_STOP = "lua_code_stop";
+const EVENT_LUA_OUTPUT = "lua_code_output";
+const EVENT_LUA_ERROR = "lua_error";
+const EVENT_LUA_RESULT = "lua_result";
+
+// ═══════════════════════════════════════════════════════════
 // NORDIC UART SERVICE (NUS) UUIDs
 // ═══════════════════════════════════════════════════════════
 
@@ -54,17 +66,17 @@ export function initializeBLE() {
 }
 
 function setupEventHandlers() {
-    // Handler for lua_print events (from Lua print() function)
-    BLEState.decoder.on('lua_print', (data) => {
+    // Handler for lua_code_output events (from Lua print() function)
+    BLEState.decoder.on(EVENT_LUA_OUTPUT, (data) => {
         const message = toString(data);
-        console.log('[LUA PRINT]', message);
+        console.log('[LUA OUTPUT]', message);
         if (BLEState.onLuaPrint) {
             BLEState.onLuaPrint(message);
         }
     });
 
     // Handler for lua_error events
-    BLEState.decoder.on('lua_error', (data) => {
+    BLEState.decoder.on(EVENT_LUA_ERROR, (data) => {
         const errorMsg = toString(data);
         console.error('[LUA ERROR]', errorMsg);
         if (BLEState.onLuaError) {
@@ -72,13 +84,13 @@ function setupEventHandlers() {
         }
     });
 
-    // Handler for lua_stop events
-    BLEState.decoder.on('lua_stop', (data) => {
-        const stopMsg = toString(data);
-        console.log('[LUA STOP]', stopMsg);
+    // Handler for lua_result events (execution complete)
+    BLEState.decoder.on(EVENT_LUA_RESULT, (data) => {
+        const result = toString(data);
+        console.log('[LUA RESULT]', result);
         BLEState.isExecuting = false;
         if (BLEState.onLuaStop) {
-            BLEState.onLuaStop(stopMsg);
+            BLEState.onLuaStop(result);
         }
     });
 
@@ -186,6 +198,25 @@ function handleNotification(event) {
 // LUA CODE EXECUTION
 // ═══════════════════════════════════════════════════════════
 
+/**
+ * Helper function to send an event frame via BLE
+ */
+async function sendEventFrame(eventName, data = '') {
+    const frame = encodeEvent(eventName, data);
+
+    // Send in chunks (480 bytes max, matching ESP32 buffer)
+    const CHUNK_SIZE = 480;
+    for (let offset = 0; offset < frame.length; offset += CHUNK_SIZE) {
+        const chunk = frame.slice(offset, offset + CHUNK_SIZE);
+        await BLEState.rxCharacteristic.writeValue(chunk);
+
+        // Small delay between chunks for reliability
+        if (offset + CHUNK_SIZE < frame.length) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+        }
+    }
+}
+
 export async function executeLuaCode(code) {
     if (!BLEState.isConnected || !BLEState.rxCharacteristic) {
         throw new Error('Not connected to ESP32');
@@ -199,20 +230,25 @@ export async function executeLuaCode(code) {
         console.log('▶ Executing Lua code...');
         BLEState.isExecuting = true;
 
-        // Encode lua_execute event
-        const frame = encodeEvent('lua_execute', code);
+        // Step 1: Clear buffer
+        console.log('  1. Clearing buffer...');
+        await sendEventFrame(EVENT_LUA_CODE_CLEAR);
+        await new Promise(resolve => setTimeout(resolve, 10));
 
-        // Send in chunks (480 bytes max, matching ESP32 buffer)
-        const CHUNK_SIZE = 480;
-        for (let offset = 0; offset < frame.length; offset += CHUNK_SIZE) {
-            const chunk = frame.slice(offset, offset + CHUNK_SIZE);
-            await BLEState.rxCharacteristic.writeValue(chunk);
+        // Step 2: Send code in chunks
+        console.log('  2. Sending code chunks...');
+        const CODE_CHUNK_SIZE = 512; // Size of Lua code chunks (not BLE chunks)
 
-            // Small delay between chunks for reliability
-            if (offset + CHUNK_SIZE < frame.length) {
-                await new Promise(resolve => setTimeout(resolve, 10));
-            }
+        for (let offset = 0; offset < code.length; offset += CODE_CHUNK_SIZE) {
+            const codeChunk = code.substring(offset, offset + CODE_CHUNK_SIZE);
+            await sendEventFrame(EVENT_LUA_CODE_ADD, codeChunk);
+            await new Promise(resolve => setTimeout(resolve, 10));
+            console.log(`     Sent chunk ${Math.floor(offset / CODE_CHUNK_SIZE) + 1} (${codeChunk.length} bytes)`);
         }
+
+        // Step 3: Execute buffer
+        console.log('  3. Executing buffer...');
+        await sendEventFrame(EVENT_LUA_CODE_RUN);
 
         console.log('✓ Lua code sent to ESP32');
         return true;
@@ -232,9 +268,8 @@ export async function stopLuaExecution() {
     try {
         console.log('⏹ Stopping Lua execution...');
 
-        // Send lua_stop event (empty data)
-        const frame = encodeEvent('lua_stop', '');
-        await BLEState.rxCharacteristic.writeValue(frame);
+        // Send lua_code_stop event (empty data)
+        await sendEventFrame(EVENT_LUA_CODE_STOP);
 
         BLEState.isExecuting = false;
         console.log('✓ Stop signal sent');
