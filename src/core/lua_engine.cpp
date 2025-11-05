@@ -2,6 +2,126 @@
 #include "../utils/debug.h"
 #include <Arduino.h>
 #include <cassert>
+#include <esp_heap_caps.h>
+
+// ═══════════════════════════════════════════════════════
+// MEMORY CONFIGURATION
+// ═══════════════════════════════════════════════════════
+
+// Enable/disable PSRAM usage for Lua (set to false to use only SRAM)
+#define LUA_USE_PSRAM true
+
+// Static SRAM pool for Lua (64KB)
+#define LUA_SRAM_POOL_SIZE (64 * 1024)
+static uint8_t lua_sram_pool[LUA_SRAM_POOL_SIZE];
+static size_t sram_pool_offset = 0;
+
+// Memory allocation statistics
+struct LuaMemStats {
+    size_t total_allocated;
+    size_t sram_allocated;
+    size_t psram_allocated;
+    size_t peak_allocated;
+    bool psram_available;
+} lua_mem_stats = {0, 0, 0, 0, false};
+
+// ═══════════════════════════════════════════════════════
+// HYBRID MEMORY ALLOCATOR
+// ═══════════════════════════════════════════════════════
+
+static void* lua_hybrid_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
+    (void)ud;
+
+    // Free operation
+    if (nsize == 0) {
+        if (ptr) {
+            // Determine if pointer is in SRAM pool or heap
+            uintptr_t ptr_addr = (uintptr_t)ptr;
+            uintptr_t pool_start = (uintptr_t)lua_sram_pool;
+            uintptr_t pool_end = pool_start + LUA_SRAM_POOL_SIZE;
+
+            if (ptr_addr >= pool_start && ptr_addr < pool_end) {
+                // SRAM pool allocation - can't free individual blocks
+                // Memory will be reclaimed when pool resets
+                lua_mem_stats.sram_allocated -= osize;
+            } else {
+                // Heap allocation (PSRAM or SRAM)
+                free(ptr);
+                lua_mem_stats.psram_allocated -= osize;
+            }
+            lua_mem_stats.total_allocated -= osize;
+        }
+        return NULL;
+    }
+
+    void* new_ptr = NULL;
+
+    // Realloc operation
+    if (ptr != NULL) {
+        // Check if pointer is in SRAM pool
+        uintptr_t ptr_addr = (uintptr_t)ptr;
+        uintptr_t pool_start = (uintptr_t)lua_sram_pool;
+        uintptr_t pool_end = pool_start + LUA_SRAM_POOL_SIZE;
+
+        if (ptr_addr >= pool_start && ptr_addr < pool_end) {
+            // Can't realloc SRAM pool memory - allocate new and copy
+            new_ptr = lua_hybrid_alloc(ud, NULL, 0, nsize);
+            if (new_ptr) {
+                memcpy(new_ptr, ptr, osize < nsize ? osize : nsize);
+                lua_mem_stats.sram_allocated -= osize;
+            }
+            return new_ptr;
+        } else {
+            // Heap realloc
+            new_ptr = realloc(ptr, nsize);
+            if (new_ptr) {
+                lua_mem_stats.total_allocated = lua_mem_stats.total_allocated - osize + nsize;
+                lua_mem_stats.psram_allocated = lua_mem_stats.psram_allocated - osize + nsize;
+                if (lua_mem_stats.total_allocated > lua_mem_stats.peak_allocated) {
+                    lua_mem_stats.peak_allocated = lua_mem_stats.total_allocated;
+                }
+            }
+            return new_ptr;
+        }
+    }
+
+    // New allocation
+    // Strategy: Small hot allocations (<512 bytes) use SRAM pool
+    //           Larger allocations use heap (PSRAM if enabled and available)
+    if (nsize < 512 && LUA_USE_PSRAM) {
+        // Try SRAM pool first
+        if (sram_pool_offset + nsize <= LUA_SRAM_POOL_SIZE) {
+            new_ptr = &lua_sram_pool[sram_pool_offset];
+            sram_pool_offset += nsize;
+            lua_mem_stats.sram_allocated += nsize;
+            lua_mem_stats.total_allocated += nsize;
+            if (lua_mem_stats.total_allocated > lua_mem_stats.peak_allocated) {
+                lua_mem_stats.peak_allocated = lua_mem_stats.total_allocated;
+            }
+            return new_ptr;
+        }
+    }
+
+    // Use heap (PSRAM if available, otherwise internal SRAM)
+    if (LUA_USE_PSRAM && lua_mem_stats.psram_available) {
+        new_ptr = heap_caps_malloc(nsize, MALLOC_CAP_SPIRAM);
+    }
+
+    // Fallback to internal SRAM if PSRAM disabled or allocation failed
+    if (new_ptr == NULL) {
+        new_ptr = malloc(nsize);
+    }
+
+    if (new_ptr) {
+        lua_mem_stats.psram_allocated += nsize;
+        lua_mem_stats.total_allocated += nsize;
+        if (lua_mem_stats.total_allocated > lua_mem_stats.peak_allocated) {
+            lua_mem_stats.peak_allocated = lua_mem_stats.total_allocated;
+        }
+    }
+
+    return new_ptr;
+}
 
 // ═══════════════════════════════════════════════════════
 // INTERNAL STATE
@@ -50,8 +170,15 @@ static void reset_lua_state() {
         L = nullptr;
     }
 
-    // Create fresh Lua state
-    L = luaL_newstate();
+    // Reset SRAM pool offset for fresh allocation
+    sram_pool_offset = 0;
+
+    // Reset allocation stats (keep PSRAM availability)
+    bool psram_was_available = lua_mem_stats.psram_available;
+    lua_mem_stats = {0, 0, 0, 0, psram_was_available};
+
+    // Create fresh Lua state with custom allocator
+    L = lua_newstate(lua_hybrid_alloc, NULL);
     assert(L != nullptr);
 
     // Set debug hook
@@ -116,6 +243,24 @@ static void lua_task(void* parameter) {
 void lua_engine_init() {
     LOG_INFO("LUA", "Initializing Lua engine...");
 
+    // Check PSRAM availability
+    #if LUA_USE_PSRAM
+    size_t psram_size = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+    lua_mem_stats.psram_available = (psram_size > 0);
+
+    if (lua_mem_stats.psram_available) {
+        LOG_INFO("LUA", "PSRAM detected: %d KB available", psram_size / 1024);
+        LOG_INFO("LUA", "Memory strategy: SRAM pool (64KB) + PSRAM heap");
+    } else {
+        LOG_INFO("LUA", "No PSRAM detected, using internal SRAM only");
+        LOG_INFO("LUA", "Memory strategy: SRAM pool (64KB) + internal heap");
+    }
+    #else
+    lua_mem_stats.psram_available = false;
+    LOG_INFO("LUA", "PSRAM disabled in configuration");
+    LOG_INFO("LUA", "Memory strategy: SRAM pool (64KB) + internal heap");
+    #endif
+
     // Create initial Lua state
     reset_lua_state();
 
@@ -132,7 +277,7 @@ void lua_engine_init() {
         &lua_task_handle,
         1
     );
-    
+
 
     LOG_INFO("LUA", "Engine initialized (RTOS task on Core 1)");
 }
@@ -226,4 +371,16 @@ void lua_engine_on_error(ErrorCallback callback) {
 
 void lua_engine_on_stop(StopCallback callback) {
     stop_callback = callback;
+}
+
+void lua_engine_print_mem_stats() {
+    LOG_INFO("LUA_MEM", "═══════════════════════════════════");
+    LOG_INFO("LUA_MEM", "Lua Memory Statistics:");
+    LOG_INFO("LUA_MEM", "  PSRAM available: %s", lua_mem_stats.psram_available ? "Yes" : "No");
+    LOG_INFO("LUA_MEM", "  Total allocated: %d KB", lua_mem_stats.total_allocated / 1024);
+    LOG_INFO("LUA_MEM", "  SRAM allocated: %d KB", lua_mem_stats.sram_allocated / 1024);
+    LOG_INFO("LUA_MEM", "  PSRAM allocated: %d KB", lua_mem_stats.psram_allocated / 1024);
+    LOG_INFO("LUA_MEM", "  Peak allocated: %d KB", lua_mem_stats.peak_allocated / 1024);
+    LOG_INFO("LUA_MEM", "  SRAM pool used: %d / %d KB", sram_pool_offset / 1024, LUA_SRAM_POOL_SIZE / 1024);
+    LOG_INFO("LUA_MEM", "═══════════════════════════════════");
 }

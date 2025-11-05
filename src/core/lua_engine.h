@@ -59,3 +59,6 @@ void lua_engine_on_error(ErrorCallback callback);
 
 // Set callback for when Lua execution stops (success or interrupt)
 void lua_engine_on_stop(StopCallback callback);
+
+// Print memory allocation statistics
+void lua_engine_print_mem_stats();

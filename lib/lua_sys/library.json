@@ -1,0 +1,41 @@
+{
+  "name": "LuaSys",
+  "version": "1.0.0",
+  "description": "Lua event loop and coroutine scheduler for ESP32 (all variants) based on FreeRTOS. Provides cooperative multitasking, timers, and message passing.",
+  "keywords": "lua, freertos, esp32, event-loop, coroutine, scheduler, rtos, timer, messaging, esp32-s2, esp32-s3, esp32-c3",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/lua_sys.git"
+  },
+  "authors": [
+    {
+      "name": "Your Name",
+      "email": "your.email@example.com",
+      "maintainer": true
+    }
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/yourusername/lua_sys",
+  "frameworks": ["arduino", "espidf"],
+  "platforms": ["espressif32"],
+  "export": {
+    "exclude": [
+      "examples",
+      ".git",
+      ".github"
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "Lua",
+      "version": ">=5.3.0",
+      "note": "Lua interpreter must be installed separately"
+    }
+  ],
+  "build": {
+    "flags": [
+      "-DLUAT_USE_FREERTOS=1"
+    ],
+    "libArchive": false
+  }
+}

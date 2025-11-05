@@ -1,0 +1,48 @@
+#######################################
+# Syntax Coloring Map For LuaSys
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+LuaSys	KEYWORD1
+sys	KEYWORD1
+rtos	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+# Lua sys module functions
+run	KEYWORD2
+taskInit	KEYWORD2
+wait	KEYWORD2
+waitUntil	KEYWORD2
+timerStart	KEYWORD2
+timerStop	KEYWORD2
+timerLoopStart	KEYWORD2
+timerIsActive	KEYWORD2
+publish	KEYWORD2
+subscribe	KEYWORD2
+unsubscribe	KEYWORD2
+safeRun	KEYWORD2
+coresume	KEYWORD2
+
+# C RTOS functions
+luat_msgbus_init	KEYWORD2
+luat_msgbus_put	KEYWORD2
+luat_msgbus_get	KEYWORD2
+luat_timer_start	KEYWORD2
+luat_timer_stop	KEYWORD2
+luat_timer_get	KEYWORD2
+luaopen_rtos	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+MSG_TIMER	LITERAL1
+INF_TIMEOUT	LITERAL1
+TASK_TIMER_ID_MAX	LITERAL1
+MSG_TIMER_ID_MAX	LITERAL1

@@ -1,0 +1,30 @@
+# Build directories
+.pio
+.pioenvs
+.piolibdeps
+build/
+*.o
+*.a
+*.so
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
+*.sln.docstates
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Compiled Lua
+*.luac
+
+# Logs
+*.log
+
+# Temporary
+*.tmp
+*.bak
+*~

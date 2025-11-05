@@ -8,7 +8,7 @@
 #include "comms/ble_comm.h"
 #include "utils/debug.h"
 #include "modules/file_transfer.h"
-
+#include "lua_sys.h"
 // ═══════════════════════════════════════════════════════════
 // MODULE DECLARATIONS
 // ═══════════════════════════════════════════════════════════
@@ -30,11 +30,15 @@ static void onLuaError(const char *error_msg)
 static void onLuaStop()
 {
     LOG_INFO("LUA", "Lua execution finished");
+
+    // Cleanup lua_sys resources (stop all timers)
+    luaSys_cleanup();
+
     // Send result event with success status
     const char *result = "Lua execution finished";
 
     event_msg_send(EVENT_LUA_RESULT, (const uint8_t *)result, strlen(result));
-      result = "Lua execution stopped";
+    result = "Lua execution stopped";
     event_msg_send(EVENT_LUA_CODE_STOP, (const uint8_t *)result, strlen(result));
 }
 
@@ -96,7 +100,12 @@ static void onLuaCodeStopEvent(const std::vector<uint8_t> &data)
 {
     (void)data; // Unused
     LOG_DEBUG("EVENT", "Lua code stop event received");
+
+    // Stop Lua execution
     lua_engine_stop();
+
+    // Cleanup lua_sys resources (stop all timers)
+    luaSys_cleanup();
 }
 
 // Wildcard handler for unhandled events
@@ -137,6 +146,7 @@ void system_init_lua()
 
     // Register Arduino module with Lua
     lua_engine_add_module(arduino_module_register);
+    lua_engine_add_module(luaSys_init); // Register LuaSys module
 
     // Register Lua callbacks
     lua_engine_on_error(onLuaError);
@@ -144,6 +154,7 @@ void system_init_lua()
 
     // Initialize Lua engine (creates RTOS task internally)
     lua_engine_init();
+    
 
     LOG_INFO("SYSTEM", "✓ Lua engine ready");
 }
