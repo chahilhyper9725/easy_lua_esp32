@@ -20,7 +20,7 @@
 // Set this to control which messages are printed
 // Default: LOG_LEVEL_INFO (shows INFO, ERROR)
 #ifndef DEBUG_LOG_LEVEL
-#define DEBUG_LOG_LEVEL LOG_LEVEL_ERROR
+#define DEBUG_LOG_LEVEL LOG_LEVEL_INFO
 #endif
 
 // ═══════════════════════════════════════════════════════

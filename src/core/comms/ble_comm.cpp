@@ -163,7 +163,7 @@ void ble_comm_send(const uint8_t* data, uint16_t len) {
 
         // Small delay between chunks to prevent buffer overflow
         if (offset < len) {
-            delay(10);  // 10ms delay between chunks
+            delay(1);  // 10ms delay between chunks
         }
     }
 

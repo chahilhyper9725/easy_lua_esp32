@@ -1,5 +1,5 @@
 #include "lua_engine.h"
-#include "../utils/debug.h"
+#include "utils/debug.h"
 #include <Arduino.h>
 #include <cassert>
 #include <esp_heap_caps.h>
@@ -128,8 +128,6 @@ static void* lua_hybrid_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
 // ═══════════════════════════════════════════════════════
 
 static lua_State* L = nullptr;
-static ModuleRegisterFunc registered_modules[16];
-static int module_count = 0;
 
 // RTOS Task Management
 static TaskHandle_t lua_task_handle = NULL;
@@ -142,6 +140,7 @@ static volatile bool stop_requested = false;
 static String code_buffer = "";
 
 // Callbacks
+static StateResetCallback state_reset_callback = nullptr;
 static ErrorCallback error_callback = nullptr;
 static StopCallback stop_callback = nullptr;
 
@@ -162,14 +161,8 @@ static void debug_hook(lua_State* state, lua_Debug* dbg) {
 // INTERNAL HELPERS
 // ═══════════════════════════════════════════════════════
 
-// Reset Lua state for clean, isolated execution
-static void reset_lua_state() {
-    // Close existing state if any
-    if (L != nullptr) {
-        lua_close(L);
-        L = nullptr;
-    }
-
+// Create a new Lua state with custom allocator and standard libraries
+static void create_lua_state() {
     // Reset SRAM pool offset for fresh allocation
     sram_pool_offset = 0;
 
@@ -181,15 +174,27 @@ static void reset_lua_state() {
     L = lua_newstate(lua_hybrid_alloc, NULL);
     assert(L != nullptr);
 
-    // Set debug hook
+    // Set debug hook to prevent watchdog resets
     lua_sethook(L, debug_hook, LUA_MASKLINE, 10);
 
-    // Load standard libraries
+    // Load standard Lua libraries
     luaL_openlibs(L);
+}
 
-    // Register all modules
-    for (int i = 0; i < module_count; i++) {
-        registered_modules[i](L);
+// Reset Lua state for clean, isolated execution
+static void reset_lua_state() {
+    // Close existing state if any
+    if (L != nullptr) {
+        lua_close(L);
+        L = nullptr;
+    }
+
+    // Create fresh Lua state
+    create_lua_state();
+
+    // Call user's state reset callback to register modules
+    if (state_reset_callback != nullptr) {
+        state_reset_callback(L);
     }
 }
 
@@ -344,13 +349,9 @@ lua_State* lua_engine_get_state() {
     return L;
 }
 
-void lua_engine_add_module(ModuleRegisterFunc register_func) {
-    if (module_count < 16) {
-        registered_modules[module_count++] = register_func;
-        LOG_DEBUG("LUA", "Module registered (total: %d)", module_count);
-    } else {
-        LOG_ERROR("LUA", "Max modules reached!");
-    }
+void lua_engine_on_state_reset(StateResetCallback callback) {
+    state_reset_callback = callback;
+    LOG_DEBUG("LUA", "State reset callback registered");
 }
 
 void lua_engine_request_stop() {

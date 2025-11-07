@@ -1,6 +1,6 @@
 #include "file_transfer.h"
-#include "../core/event_msg.h"
-#include "../utils/debug.h"
+#include "event_msg.h"
+#include "utils/debug.h"
 #include <rom/crc.h>
 
 // ═══════════════════════════════════════════════════════

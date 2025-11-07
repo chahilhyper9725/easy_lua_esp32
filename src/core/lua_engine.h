@@ -18,7 +18,7 @@
 
 
 // Callback types
-typedef void (*ModuleRegisterFunc)(lua_State* L);
+typedef void (*StateResetCallback)(lua_State* L);  // Called when Lua state is reset (register your modules here)
 typedef void (*ErrorCallback)(const char* error_msg);
 typedef void (*StopCallback)();
 
@@ -41,9 +41,9 @@ void lua_engine_stop();
 // Get Lua state for advanced use
 lua_State* lua_engine_get_state();
 
-// Register a module (modules call this to register their Lua functions)
-// This is called automatically before each script execution
-void lua_engine_add_module(ModuleRegisterFunc register_func);
+// Set callback for when Lua state is reset (register your modules here)
+// This callback is called every time a fresh Lua state is created
+void lua_engine_on_state_reset(StateResetCallback callback);
 
 // Request stop of running Lua code (called from serial interrupt)
 void lua_engine_request_stop();

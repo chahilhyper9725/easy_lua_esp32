@@ -1,0 +1,85 @@
+{
+    "name": "Storage",
+    "description": "Persistent storage system with automatic type conversion",
+    "version": "1.0.0",
+    "functions": [
+        {
+            "name": "storage.set",
+            "snippet": "storage.set(\"${1:key}\", ${2:value})",
+            "description": "storage.set(key, value) - Store data with automatic type detection\nSupports: int64, double, string, bool, table (as JSON blob)\nParameters:\n- key: string identifier\n- value: any supported type\nReturns: boolean success\nExample: storage.set(\"count\", 42)",
+            "category": "Storage"
+        },
+        {
+            "name": "storage.get",
+            "snippet": "storage.get(\"${1:key}\", ${2:default_value})",
+            "description": "storage.get(key, default) - Retrieve data with type inference from default\nType determined by default value type:\n- storage.get(\"count\", 0) returns int64\n- storage.get(\"rate\", 0.0) returns double\n- storage.get(\"name\", \"\") returns string\n- storage.get(\"enabled\", false) returns bool\n- storage.get(\"config\", {}) returns table\nReturns: stored value or default if key doesn't exist",
+            "category": "Storage"
+        },
+        {
+            "name": "storage.remove",
+            "snippet": "storage.remove(\"${1:key}\")",
+            "description": "storage.remove(key) - Delete a stored key-value pair\nParameters:\n- key: string identifier to remove\nReturns: boolean success\nExample: storage.remove(\"old_setting\")",
+            "category": "Storage"
+        },
+        {
+            "name": "storage.clear", 
+            "snippet": "storage.clear()",
+            "description": "storage.clear() - Remove all stored data\nClears entire storage namespace\nReturns: nothing\nWarning: This is permanent and cannot be undone",
+            "category": "Storage"
+        },
+        {
+            "name": "storage.export",
+            "snippet": "storage.export('[\"${1:key1}\", \"${2:key2}\"]')",
+            "description": "storage.export(keys_array) - Export specific keys to JSON string\nParameters:\n- keys_array: JSON array string of keys to export\nReturns: JSON string with exported data\nExample: storage.export('[\"setting1\", \"setting2\"]')",
+            "category": "Storage"
+        },
+        {
+            "name": "storage.import", 
+            "snippet": "storage.import('${1:json_string}')",
+            "description": "storage.import(json_string) - Import data from JSON string\nParameters:\n- json_string: JSON object with key-value pairs\nReturns: boolean success\nExample: storage.import('{\"count\": 42, \"name\": \"test\"}')",
+            "category": "Storage"
+        },
+        {
+            "name": "storage.stop",
+            "snippet": "storage.stop()",
+            "description": "storage.stop() - Stop any pending storage operations\nCleanup function for graceful shutdown\nReturns: nothing\nCall before system restart or shutdown",
+            "category": "Storage"
+        },
+        {
+            "name": "storage.examples.basic",
+            "snippet": "-- Basic storage operations\nstorage.set(\"count\", 42)\nstorage.set(\"rate\", 3.14)\nstorage.set(\"name\", \"device\")\nstorage.set(\"enabled\", true)\n\nlocal count = storage.get(\"count\", 0)     -- int64\nlocal rate = storage.get(\"rate\", 0.0)     -- double  \nlocal name = storage.get(\"name\", \"\")      -- string\nlocal enabled = storage.get(\"enabled\", false) -- bool",
+            "description": "Basic storage examples with automatic type conversion",
+            "category": "Storage Examples"
+        },
+        {
+            "name": "storage.examples.table", 
+            "snippet": "-- Table/JSON storage\nlocal config = {\n\tthreshold = 100,\n\tmode = \"auto\",\n\tsensors = {\"temp\", \"humidity\"}\n}\nstorage.set(\"device_config\", config)\n\n-- Retrieve table\nlocal saved_config = storage.get(\"device_config\", {})\nprint(\"Mode:\", saved_config.mode)",
+            "description": "Store and retrieve Lua tables as JSON blobs",
+            "category": "Storage Examples"
+        },
+        {
+            "name": "storage.examples.settings",
+            "snippet": "-- Settings management pattern\nlocal function save_settings()\n\tlocal settings = {\n\t\tvolume = buzzer_volume,\n\t\tspeed = motor_speed,\n\t\twifi_ssid = network_name\n\t}\n\tstorage.set(\"user_settings\", settings)\nend\n\nlocal function load_settings()\n\tlocal defaults = {\n\t\tvolume = 50,\n\t\tspeed = 1000,\n\t\twifi_ssid = \"\"\n\t}\n\treturn storage.get(\"user_settings\", defaults)\nend",
+            "description": "Common settings management pattern",
+            "category": "Storage Examples"
+        },
+        {
+            "name": "storage.examples.counter",
+            "snippet": "-- Persistent counter example\nlocal function increment_counter()\n\tlocal count = storage.get(\"boot_count\", 0)\n\tcount = count + 1\n\tstorage.set(\"boot_count\", count)\n\tprint(\"Boot count:\", count)\n\treturn count\nend\n\n-- Call on startup\nincrement_counter()",
+            "description": "Persistent counter that survives reboots",
+            "category": "Storage Examples"
+        },
+        {
+            "name": "storage.examples.backup",
+            "snippet": "-- Backup/restore example\nlocal function backup_data()\n\tlocal keys = '[\"setting1\", \"setting2\", \"user_config\"]'\n\tlocal backup = storage.export(keys)\n\treturn backup\nend\n\nlocal function restore_data(backup_json)\n\tlocal success = storage.import(backup_json)\n\tif success then\n\t\tprint(\"Data restored successfully\")\n\telse\n\t\tprint(\"Restore failed\")\n\tend\nend",
+            "description": "Backup and restore functionality using export/import",
+            "category": "Storage Examples"
+        },
+        {
+            "name": "storage.test.basic",
+            "snippet": "-- Storage test suite\nlocal function test_storage()\n\tprint(\"Testing storage...\")\n\t\n\t-- Test integers\n\tstorage.set(\"test_int\", 42)\n\tassert(storage.get(\"test_int\", 0) == 42, \"Int test failed\")\n\t\n\t-- Test numbers\n\tstorage.set(\"test_num\", 3.14)\n\tlocal num = storage.get(\"test_num\", 0.0)\n\tassert(math.abs(num - 3.14) < 0.001, \"Number test failed\")\n\t\n\t-- Test strings\n\tstorage.set(\"test_str\", \"hello\")\n\tassert(storage.get(\"test_str\", \"\") == \"hello\", \"String test failed\")\n\t\n\t-- Test booleans\n\tstorage.set(\"test_bool\", true)\n\tassert(storage.get(\"test_bool\", false) == true, \"Bool test failed\")\n\t\n\t-- Test tables\n\tlocal test_table = {a = 1, b = \"test\"}\n\tstorage.set(\"test_table\", test_table)\n\tlocal retrieved = storage.get(\"test_table\", {})\n\tassert(retrieved.a == 1, \"Table test failed\")\n\t\n\t-- Test removal\n\tstorage.remove(\"test_int\")\n\tassert(storage.get(\"test_int\", -1) == -1, \"Remove test failed\")\n\t\n\tprint(\"All storage tests passed!\")\nend\n\n-- Run tests\ntest_storage()",
+            "description": "Comprehensive test suite for storage functionality",
+            "category": "Storage Testing"
+        }
+    ]
+}

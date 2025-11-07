@@ -1,54 +1,97 @@
 /*
  * lua_sys - Arduino Library Implementation
- * Main entry point for Arduino sketches
+ * RTOS and Timer Module for Lua
  */
 
 #include "lua_sys.h"
 
-// Embedded sys.lua as C string (generated from lua/sys.lua)
-// In production, use a build script to convert sys.lua to this array
-// For now, this is a placeholder - user should load sys.lua from SPIFFS/LittleFS
-const char luaSys_sys_lua[] = R"LUA_SCRIPT(
--- Placeholder: Load actual sys.lua from filesystem
--- or embed it here using xxd or similar tool
-print("ERROR: sys.lua not embedded. Load from filesystem instead.")
-return {}
-)LUA_SCRIPT";
+// Track if hardware is initialized (prevent double-init)
+static bool hardware_initialized = false;
+
+// ═══════════════════════════════════════════════════════════
+// HARDWARE INITIALIZATION
+// ═══════════════════════════════════════════════════════════
 
 /**
- * Initialize LuaSys subsystems
- * Call this after creating Lua state, before running scripts
- *
- * @param L Lua state
+ * Initialize lua_sys hardware (FreeRTOS message queue)
+ * Call this ONCE in your hardware_init callback
  */
-void luaSys_init(lua_State *L) {
-    if (L == NULL) {
-        LLOGE("luaSys_init: Lua state is NULL");
+void lua_sys_init_hardware(void) {
+    if (hardware_initialized) {
+        LLOGI("lua_sys hardware already initialized, skipping");
         return;
     }
 
-    // Initialize message bus
+    // Initialize FreeRTOS message bus (creates queue)
     luat_msgbus_init();
 
-    // Register rtos module
+    hardware_initialized = true;
+    LLOGI("lua_sys hardware initialized (message bus created)");
+}
+
+// ═══════════════════════════════════════════════════════════
+// LUA REGISTRATION
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Register lua_sys module with Lua state
+ * Call this in your lua_register callback (on every Lua state reset)
+ */
+void lua_sys_register(lua_State *L) {
+    if (L == NULL) {
+        LLOGE("lua_sys_register: Lua state is NULL");
+        return;
+    }
+
+    if (!hardware_initialized) {
+        LLOGE("lua_sys_register: Hardware not initialized! Call lua_sys_init_hardware() first");
+        return;
+    }
+
+    // Register rtos module with Lua
     luaopen_rtos(L);
     lua_setglobal(L, "rtos");
 
-    LLOGI("LuaSys initialized");
+    LLOGI("lua_sys registered with Lua state");
 }
 
+// ═══════════════════════════════════════════════════════════
+// CLEANUP
+// ═══════════════════════════════════════════════════════════
+
 /**
- * Cleanup LuaSys subsystems
- * Call this before shutting down or resetting Lua
- * Stops all timers and releases resources
+ * Cleanup lua_sys resources
+ * Call this in your cleanup callback when Lua stops
  */
-void luaSys_cleanup(void) {
-    LLOGI("LuaSys cleanup starting...");
+void lua_sys_cleanup(void) {
+    LLOGI("lua_sys cleanup starting...");
 
     // Stop all active timers
     luat_timer_cleanup();
 
-    // Message bus doesn't need cleanup (stateless queue)
+    // Message bus doesn't need cleanup (queue remains for next execution)
 
-    LLOGI("LuaSys cleanup complete");
+    LLOGI("lua_sys cleanup complete");
+}
+
+// ═══════════════════════════════════════════════════════════
+// DEPRECATED API (backward compatibility)
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * DEPRECATED: Old combined init function
+ * Use lua_sys_init_hardware() and lua_sys_register() instead
+ */
+void luaSys_init(lua_State *L) {
+    // For backward compatibility, call both
+    lua_sys_init_hardware();
+    lua_sys_register(L);
+}
+
+/**
+ * DEPRECATED: Old cleanup function
+ * Use lua_sys_cleanup() instead
+ */
+void luaSys_cleanup(void) {
+    lua_sys_cleanup();
 }
