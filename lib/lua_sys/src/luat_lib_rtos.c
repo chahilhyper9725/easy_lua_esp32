@@ -6,6 +6,7 @@
 #include "luat_base.h"
 #include "luat_msgbus.h"
 #include "luat_timer.h"
+#include "lua.hpp"
 
 #define LUAT_LOG_TAG "rtos"
 

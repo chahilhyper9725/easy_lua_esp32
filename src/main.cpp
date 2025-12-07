@@ -5,7 +5,7 @@
 
 #include <Arduino.h>
 #include <easy_lua_ble.h>  // Single library header
-#include "lua_sys.h"         // User module: RTOS, timers, etc.
+// #include "lua_sys.h"         // User module: RTOS, timers, etc.
 
 // ═══════════════════════════════════════════════════════════
 // USER CALLBACK IMPLEMENTATIONS
@@ -16,7 +16,7 @@
 void my_hardware_init()
 {
     // Initialize lua_sys hardware (FreeRTOS message queue)
-    lua_sys_init_hardware();
+    // lua_sys_init_hardware();
 
     // Initialize your custom hardware
     // pinMode(LED_PIN, OUTPUT);
@@ -29,7 +29,7 @@ void my_hardware_init()
 void my_lua_register(lua_State* L)
 {
     // Register lua_sys module (RTOS, timers)
-    lua_sys_register(L);
+    // lua_sys_register(L);
 
     // Register your custom Lua functions
     // lua_register(L, "myFunc", my_func);
@@ -42,7 +42,7 @@ void my_lua_register(lua_State* L)
 void my_cleanup()
 {
     // Cleanup lua_sys resources
-    lua_sys_cleanup();
+    // lua_sys_cleanup();
 
     // Cleanup your hardware
     // digitalWrite(LED_PIN, LOW);

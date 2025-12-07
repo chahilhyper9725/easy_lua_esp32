@@ -12,13 +12,8 @@
 #include <stdint.h>
 
 // Lua includes (use lua.hpp from C++, individual headers from C)
-#ifdef __cplusplus
     #include "lua.hpp"
-#else
-    #include "lua.h"
-    #include "lualib.h"
-    #include "lauxlib.h"
-#endif
+
 
 // FreeRTOS includes
 #include "freertos/FreeRTOS.h"

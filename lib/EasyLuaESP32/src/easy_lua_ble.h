@@ -8,9 +8,7 @@
 
 #include <Arduino.h>
 
-extern "C" {
-#include "lua.h"
-}
+#include "lua.hpp"
 
 // ═══════════════════════════════════════════════════════════
 // USER CALLBACK TYPES
