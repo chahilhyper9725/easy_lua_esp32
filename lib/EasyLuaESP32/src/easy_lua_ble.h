@@ -1,10 +1,10 @@
 // ═══════════════════════════════════════════════════════════
-// EasyLuaESP32 - Lua Scripting Engine for ESP32
+// easy_lua_ble - Lua Scripting Engine for ESP32
 // Complete system with BLE, Event Messaging, and File Storage
 // ═══════════════════════════════════════════════════════════
 
-#ifndef EASY_LUA_ESP32_H
-#define EASY_LUA_ESP32_H
+#ifndef EASY_LUA_BLE_H
+#define EASY_LUA_BLE_H
 
 #include <Arduino.h>
 
@@ -43,7 +43,7 @@ typedef void (*StopCleanupCallback)(void);
 // ═══════════════════════════════════════════════════════════
 
 /**
- * EasyLuaESP32 - Main system class
+ * easy_lua_ble - Main system class
  *
  * This class provides a unified interface to initialize and manage
  * the complete Lua scripting system including:
@@ -53,14 +53,14 @@ typedef void (*StopCleanupCallback)(void);
  * - File storage (LittleFS)
  * - System modules (arduino, eventmsg, storage)
  */
-class EasyLuaESP32 {
+class easy_lua_ble {
 public:
     // ═══════════════════════════════════════════════════════════
     // INITIALIZATION
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * Initialize the complete EasyLuaESP32 system
+     * Initialize the complete easy_lua_ble system
      *
      * This function initializes all subsystems in the correct order:
      * 1. Serial communication (115200 baud)
@@ -81,7 +81,7 @@ public:
      * void my_cleanup() { digitalWrite(LED_PIN, LOW); }
      *
      * void setup() {
-     *     EasyLuaESP32::begin(my_hardware_init, my_lua_register, my_cleanup);
+     *     easy_lua_ble::begin(my_hardware_init, my_lua_register, my_cleanup);
      * }
      * @endcode
      */
@@ -184,4 +184,4 @@ private:
     static bool initialized;
 };
 
-#endif // EASY_LUA_ESP32_H
+#endif // EASY_LUA_BLE_H

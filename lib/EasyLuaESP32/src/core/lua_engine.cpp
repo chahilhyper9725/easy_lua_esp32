@@ -283,6 +283,7 @@ void lua_engine_init() {
         1
     );
 
+    // lua_engine_execute("dofile('/littlefs/main.lua')"); // Warm up the task
 
     LOG_INFO("LUA", "Engine initialized (RTOS task on Core 1)");
 }

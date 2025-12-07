@@ -1,4 +1,4 @@
-# EasyLuaESP32 Library Creation Guide
+# easy_lua_ble Library Creation Guide
 
 ## Overview
 
@@ -17,19 +17,19 @@ Run these commands from the project root:
 cd C:\Users\chahi\OneDrive\Documents\PlatformIO\Projects\easy_lua_esp32
 
 # Copy core folder
-xcopy /E /I /Y src\core lib\EasyLuaESP32\src\core
+xcopy /E /I /Y src\core lib\easy_lua_ble\src\core
 
 # Copy lua_modules folder
-xcopy /E /I /Y src\lua_modules lib\EasyLuaESP32\src\lua_modules
+xcopy /E /I /Y src\lua_modules lib\easy_lua_ble\src\lua_modules
 
 # Copy system_init folder
-xcopy /E /I /Y src\system_init lib\EasyLuaESP32\src\system_init
+xcopy /E /I /Y src\system_init lib\easy_lua_ble\src\system_init
 
 # Copy lua library
-xcopy /E /I /Y lib\lua lib\EasyLuaESP32\lib\lua
+xcopy /E /I /Y lib\lua lib\easy_lua_ble\lib\lua
 
 # Copy lua_sys library
-xcopy /E /I /Y lib\lua_sys lib\EasyLuaESP32\lib\lua_sys
+xcopy /E /I /Y lib\lua_sys lib\easy_lua_ble\lib\lua_sys
 ```
 
 ### Verify Copy
@@ -37,14 +37,14 @@ xcopy /E /I /Y lib\lua_sys lib\EasyLuaESP32\lib\lua_sys
 After copying, your library structure should look like:
 
 ```
-lib/EasyLuaESP32/
+lib/easy_lua_ble/
 ├── library.json                    ✅ Created
 ├── library.properties              ✅ Created
 ├── README.md                       ✅ Created
 │
 ├── src/
-│   ├── EasyLuaESP32.h             ✅ Created (public API)
-│   ├── EasyLuaESP32.cpp           ✅ Created
+│   ├── easy_lua_ble.h             ✅ Created (public API)
+│   ├── easy_lua_ble.cpp           ✅ Created
 │   │
 │   ├── core/                       ⚠️ Needs manual copy
 │   │   ├── comms/
@@ -91,7 +91,7 @@ Change the include:
 #include "system_init/system_init.h"
 
 // New:
-#include <EasyLuaESP32.h>
+#include <easy_lua_ble.h>
 ```
 
 Change the init call:
@@ -100,7 +100,7 @@ Change the init call:
 system_init(my_hardware_init, my_lua_register, my_cleanup);
 
 // New:
-EasyLuaESP32::init(my_hardware_init, my_lua_register, my_cleanup);
+easy_lua_ble::init(my_hardware_init, my_lua_register, my_cleanup);
 ```
 
 ---
@@ -120,9 +120,9 @@ After the library is working, you can optionally remove the old `src/` folders:
 ```
 easy_lua_esp32/
 ├── lib/
-│   └── EasyLuaESP32/              # 📦 Complete library
+│   └── easy_lua_ble/              # 📦 Complete library
 │       ├── src/
-│       │   ├── EasyLuaESP32.h     # Public API
+│       │   ├── easy_lua_ble.h     # Public API
 │       │   ├── core/
 │       │   ├── lua_modules/
 │       │   └── system_init/
@@ -155,9 +155,9 @@ src/core/, src/lua_modules/, src/system_init/
 ```
 User Code (main.cpp)
     ↓
-#include <EasyLuaESP32.h>  (Single public header)
+#include <easy_lua_ble.h>  (Single public header)
     ↓
-EasyLuaESP32 Class (Wrapper)
+easy_lua_ble Class (Wrapper)
     ↓
 Internal: system_init, core, lua_modules
 ```
@@ -179,16 +179,16 @@ void setup() {
 ### New API (Library)
 
 ```cpp
-#include <EasyLuaESP32.h>
+#include <easy_lua_ble.h>
 
 void setup() {
-    EasyLuaESP32::init(hw_init, lua_reg, cleanup);
+    easy_lua_ble::init(hw_init, lua_reg, cleanup);
 }
 ```
 
 **Note:** For backward compatibility, `system_init()` macro still works:
 ```cpp
-#define system_init(...) EasyLuaESP32::init(__VA_ARGS__)
+#define system_init(...) easy_lua_ble::init(__VA_ARGS__)
 ```
 
 ---
@@ -210,7 +210,7 @@ void setup() {
 
 ### Local Installation
 
-Users can install by copying the `lib/EasyLuaESP32` folder to:
+Users can install by copying the `lib/easy_lua_ble` folder to:
 - PlatformIO: Project's `lib/` folder
 - Arduino: `~/Documents/Arduino/libraries/`
 
@@ -237,12 +237,12 @@ Upload to ESP32 and verify:
 ### Test 3: Library API Check
 
 ```cpp
-#include <EasyLuaESP32.h>
+#include <easy_lua_ble.h>
 
 void setup() {
     // Test API methods
-    Serial.println(EasyLuaESP32::getVersion());
-    EasyLuaESP32::printSystemInfo();
+    Serial.println(easy_lua_ble::getVersion());
+    easy_lua_ble::printSystemInfo();
 }
 ```
 
@@ -250,7 +250,7 @@ void setup() {
 
 ## Troubleshooting
 
-### Error: "EasyLuaESP32.h: No such file or directory"
+### Error: "easy_lua_ble.h: No such file or directory"
 
 **Solution:** The library files weren't copied. Run the xcopy commands above.
 
@@ -260,7 +260,7 @@ void setup() {
 
 ### Error: "undefined reference to `lua_*`"
 
-**Solution:** The `lib/lua/` folder wasn't copied. Copy `lib/lua/` to `lib/EasyLuaESP32/lib/lua/`.
+**Solution:** The `lib/lua/` folder wasn't copied. Copy `lib/lua/` to `lib/easy_lua_ble/lib/lua/`.
 
 ### Compilation errors in library files
 
@@ -272,7 +272,7 @@ void setup() {
 
 ### For Users
 
-1. ✅ **Simple API** - Single `#include <EasyLuaESP32.h>`
+1. ✅ **Simple API** - Single `#include <easy_lua_ble.h>`
 2. ✅ **Clean project** - Only `main.cpp` in user's `src/`
 3. ✅ **Version control** - Library versioning via semantic versioning
 4. ✅ **Easy updates** - Update library, not entire codebase
@@ -300,7 +300,7 @@ Both provide:
 
 ### Differences
 
-| Feature | EasyLuaESP32 | LuaBLE_OS |
+| Feature | easy_lua_ble | LuaBLE_OS |
 |---------|--------------|-----------|
 | **API Style** | Function callbacks | Config struct + static methods |
 | **Lua Runtime** | Basic Lua 5.4 | LuatOS (advanced) |
@@ -310,7 +310,7 @@ Both provide:
 
 ### When to Use Each
 
-**Use EasyLuaESP32 when:**
+**Use easy_lua_ble when:**
 - Simple projects
 - Learning Lua on ESP32
 - Direct callback pattern preferred
@@ -341,18 +341,18 @@ After library is working:
 ## File Checklist
 
 Library files created:
-- [x] `lib/EasyLuaESP32/library.json`
-- [x] `lib/EasyLuaESP32/library.properties`
-- [x] `lib/EasyLuaESP32/README.md`
-- [x] `lib/EasyLuaESP32/src/EasyLuaESP32.h`
-- [x] `lib/EasyLuaESP32/src/EasyLuaESP32.cpp`
+- [x] `lib/easy_lua_ble/library.json`
+- [x] `lib/easy_lua_ble/library.properties`
+- [x] `lib/easy_lua_ble/README.md`
+- [x] `lib/easy_lua_ble/src/easy_lua_ble.h`
+- [x] `lib/easy_lua_ble/src/easy_lua_ble.cpp`
 
 Files to copy manually:
-- [ ] `src/core/` → `lib/EasyLuaESP32/src/core/`
-- [ ] `src/lua_modules/` → `lib/EasyLuaESP32/src/lua_modules/`
-- [ ] `src/system_init/` → `lib/EasyLuaESP32/src/system_init/`
-- [ ] `lib/lua/` → `lib/EasyLuaESP32/lib/lua/`
-- [ ] `lib/lua_sys/` → `lib/EasyLuaESP32/lib/lua_sys/`
+- [ ] `src/core/` → `lib/easy_lua_ble/src/core/`
+- [ ] `src/lua_modules/` → `lib/easy_lua_ble/src/lua_modules/`
+- [ ] `src/system_init/` → `lib/easy_lua_ble/src/system_init/`
+- [ ] `lib/lua/` → `lib/easy_lua_ble/lib/lua/`
+- [ ] `lib/lua_sys/` → `lib/easy_lua_ble/lib/lua_sys/`
 
 User files updated:
 - [x] `src/main_new.cpp` (new library-based main)

@@ -206,6 +206,8 @@ static void system_init_lua()
     // Initialize Lua engine (creates RTOS task internally)
     lua_engine_init();
 
+    // luaL_dofile(lua_engine_get_state(), "/lua_sys/init.lua");
+
     LOG_INFO("SYSTEM", "✓ Lua engine ready");
 }
 

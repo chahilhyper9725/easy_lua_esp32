@@ -1,20 +1,20 @@
 {
-  "name": "EasyLuaESP32",
+  "name": "easy_lua_ble",
   "version": "1.0.0",
   "description": "Lua scripting engine for ESP32 with BLE communication, event messaging, and file storage",
   "keywords": ["lua", "esp32", "ble", "rtos", "scripting", "embedded"],
   "authors": [
     {
-      "name": "Easy Lua ESP32 Project",
+      "name": "Easy Lua BLE Project",
       "maintainer": true
     }
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/EasyLuaESP32.git"
+    "url": "https://github.com/yourusername/easy_lua_ble.git"
   },
   "license": "MIT",
-  "homepage": "https://github.com/yourusername/EasyLuaESP32",
+  "homepage": "https://github.com/yourusername/easy_lua_ble",
   "frameworks": ["arduino"],
   "platforms": ["espressif32"],
   "dependencies": [
@@ -22,11 +22,19 @@
       "name": "ArduinoJson",
       "version": "^7.4.2"
     },
+        {
+      "name": "Lua",
+      "version": ">=5.3.0",
+      "note": "Lua interpreter must be installed separately"
+    },
     {
       "name": "NimBLE-Arduino",
       "version": "^1.4.0"
     }
   ],
+
+
+
   "build": {
     "flags": [
       "-DBOARD_HAS_PSRAM",

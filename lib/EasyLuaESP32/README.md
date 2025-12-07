@@ -1,4 +1,4 @@
-# EasyLuaESP32 Library
+# easy_lua_ble Library
 
 A complete Lua scripting engine for ESP32 with BLE communication, event messaging, and file storage.
 
@@ -6,10 +6,10 @@ A complete Lua scripting engine for ESP32 with BLE communication, event messagin
 
 ### Step 1: Copy Source Files
 
-The library structure is created, but you need to **manually copy** the following folders from `src/` to `lib/EasyLuaESP32/src/`:
+The library structure is created, but you need to **manually copy** the following folders from `src/` to `lib/easy_lua_ble/src/`:
 
 ```
-📁 src/                          →  📁 lib/EasyLuaESP32/src/
+📁 src/                          →  📁 lib/easy_lua_ble/src/
 ├── 📁 core/                     →  ├── 📁 core/
 │   ├── 📁 comms/               →  │   ├── 📁 comms/
 │   ├── event_msg.cpp/h         →  │   ├── event_msg.cpp/h
@@ -32,7 +32,7 @@ The library structure is created, but you need to **manually copy** the followin
 Also copy the `lib/lua/` folder:
 
 ```
-📁 lib/lua/  →  📁 lib/EasyLuaESP32/lib/lua/
+📁 lib/lua/  →  📁 lib/easy_lua_ble/lib/lua/
 ```
 
 ### Step 3: Copy lua_sys Library
@@ -40,7 +40,7 @@ Also copy the `lib/lua/` folder:
 And copy the `lib/lua_sys/` folder:
 
 ```
-📁 lib/lua_sys/  →  📁 lib/EasyLuaESP32/lib/lua_sys/
+📁 lib/lua_sys/  →  📁 lib/easy_lua_ble/lib/lua_sys/
 ```
 
 ### Commands to Copy (Windows PowerShell)
@@ -50,32 +50,32 @@ And copy the `lib/lua_sys/` folder:
 cd C:\Users\chahi\OneDrive\Documents\PlatformIO\Projects\easy_lua_esp32
 
 # Copy core
-xcopy /E /I /Y src\core lib\EasyLuaESP32\src\core
+xcopy /E /I /Y src\core lib\easy_lua_ble\src\core
 
 # Copy lua_modules
-xcopy /E /I /Y src\lua_modules lib\EasyLuaESP32\src\lua_modules
+xcopy /E /I /Y src\lua_modules lib\easy_lua_ble\src\lua_modules
 
 # Copy system_init
-xcopy /E /I /Y src\system_init lib\EasyLuaESP32\src\system_init
+xcopy /E /I /Y src\system_init lib\easy_lua_ble\src\system_init
 
 # Copy lua library
-xcopy /E /I /Y lib\lua lib\EasyLuaESP32\lib\lua
+xcopy /E /I /Y lib\lua lib\easy_lua_ble\lib\lua
 
 # Copy lua_sys library
-xcopy /E /I /Y lib\lua_sys lib\EasyLuaESP32\lib\lua_sys
+xcopy /E /I /Y lib\lua_sys lib\easy_lua_ble\lib\lua_sys
 ```
 
 ## Library Structure
 
 ```
-lib/EasyLuaESP32/
+lib/easy_lua_ble/
 ├── library.json                    # PlatformIO metadata
 ├── library.properties              # Arduino IDE metadata
 ├── README.md                       # This file
 │
 ├── src/
-│   ├── EasyLuaESP32.h             # 🌟 PUBLIC API (unified header)
-│   ├── EasyLuaESP32.cpp           # Implementation wrapper
+│   ├── easy_lua_ble.h             # 🌟 PUBLIC API (unified header)
+│   ├── easy_lua_ble.cpp           # Implementation wrapper
 │   │
 │   ├── core/                       # Core system (internal)
 │   │   ├── comms/ble_comm.*
@@ -104,7 +104,7 @@ lib/EasyLuaESP32/
 
 ```cpp
 #include <Arduino.h>
-#include <EasyLuaESP32.h>
+#include <easy_lua_ble.h>
 #include "lua_sys.h"
 
 // Hardware initialization callback
@@ -136,7 +136,7 @@ void my_cleanup() {
 
 void setup() {
     // Initialize the complete system
-    EasyLuaESP32::init(
+    easy_lua_ble::init(
         my_hardware_init,
         my_lua_register,
         my_cleanup
@@ -154,7 +154,7 @@ Once installed, you only need:
 
 1. **Include the header:**
    ```cpp
-   #include <EasyLuaESP32.h>
+   #include <easy_lua_ble.h>
    ```
 
 2. **Provide three callbacks:**
@@ -164,7 +164,7 @@ Once installed, you only need:
 
 3. **Call init:**
    ```cpp
-   EasyLuaESP32::init(my_hardware_init, my_lua_register, my_cleanup);
+   easy_lua_ble::init(my_hardware_init, my_lua_register, my_cleanup);
    ```
 
 ## API Reference
@@ -172,7 +172,7 @@ Once installed, you only need:
 ### Initialization
 
 ```cpp
-static void EasyLuaESP32::init(
+static void easy_lua_ble::init(
     HardwareInitCallback hw_init,
     LuaRegisterCallback lua_reg,
     StopCleanupCallback cleanup

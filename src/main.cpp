@@ -1,10 +1,10 @@
 // ═══════════════════════════════════════════════════════════
-// Easy Lua ESP32 - Library Example
-// Demonstrates using EasyLuaESP32 as a library
+// Easy Lua BLE - Library Example
+// Demonstrates using easy_lua_ble as a library
 // ═══════════════════════════════════════════════════════════
 
 #include <Arduino.h>
-#include <EasyLuaESP32.h>  // 🌟 Single library header
+#include <easy_lua_ble.h>  // Single library header
 #include "lua_sys.h"         // User module: RTOS, timers, etc.
 
 // ═══════════════════════════════════════════════════════════
@@ -57,14 +57,14 @@ void my_cleanup()
 void setup()
 {
     // Initialize using library API
-    EasyLuaESP32::begin(
+    easy_lua_ble::begin(
         my_hardware_init,
         my_lua_register,
         my_cleanup
     );
 
     // Print system info
-    EasyLuaESP32::printSystemInfo();
+    easy_lua_ble::printSystemInfo();
 }
 
 // ═══════════════════════════════════════════════════════════
