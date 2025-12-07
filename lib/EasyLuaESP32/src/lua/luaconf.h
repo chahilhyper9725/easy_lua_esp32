@@ -223,7 +223,7 @@
 
 #else			/* }{ */
 
-#define LUA_ROOT	"littlefs"
+#define LUA_ROOT	"/littlefs"
 #define LUA_LDIR	LUA_ROOT  "/"
 #define LUA_CDIR	LUA_ROOT  "/"
 #define LUA_PATH_DEFAULT  \

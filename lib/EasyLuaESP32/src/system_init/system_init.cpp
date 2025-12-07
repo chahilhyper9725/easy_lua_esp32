@@ -35,7 +35,7 @@ static StopCleanupCallback g_user_cleanup = nullptr;
 // ═══════════════════════════════════════════════════════════
 
 // Callback to register all Lua modules (called on every state reset)
-static void onLuaStateReset(lua_State* L)
+static void onLuaStateReset(lua_State *L)
 {
     // ─────────────────────────────────────────────────────────
     // SYSTEM MODULES (automatically registered)
@@ -205,8 +205,8 @@ static void system_init_lua()
 
     // Initialize Lua engine (creates RTOS task internally)
     lua_engine_init();
-
-    // luaL_dofile(lua_engine_get_state(), "/lua_sys/init.lua");
+    delay(500); // Wait for Lua engine to stabilize
+    luaL_dofile(lua_engine_get_state(), "/lua_sys/init.lua");
 
     LOG_INFO("SYSTEM", "✓ Lua engine ready");
 }
@@ -270,8 +270,7 @@ static void system_init_storage()
 void system_init(
     HardwareInitCallback hw_init,
     LuaRegisterCallback lua_reg,
-    StopCleanupCallback cleanup
-)
+    StopCleanupCallback cleanup)
 {
     // ─────────────────────────────────────────────────────────
     // STEP 1: Store user callbacks

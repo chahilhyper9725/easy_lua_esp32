@@ -251,6 +251,17 @@ static int lua_randomSeed(lua_State *L)
     return 0;
 }
 
+static int lua_dofile(lua_State *L)
+{
+    const char *filename = luaL_checkstring(L, 1);
+    
+    // Build full path in a local buffer
+    char path[256];
+    snprintf(path, sizeof(path), "/littlefs/%s", filename);
+    
+    return luaL_dofile(L, path);
+}
+
 // ───────────────────────────────────────────────────────
 // REGISTER (Called before each Lua script execution)
 // ───────────────────────────────────────────────────────
@@ -280,6 +291,8 @@ void arduino_module_register(lua_State *L)
     lua_register(L, "random", lua_random);
     lua_register(L, "randomSeed", lua_randomSeed);
 
+    lua_register(L, "dofile", lua_dofile);
+
     // Constants
     lua_pushinteger(L, OUTPUT);
     lua_setglobal(L, "OUTPUT");
@@ -292,3 +305,4 @@ void arduino_module_register(lua_State *L)
     lua_pushinteger(L, LOW);
     lua_setglobal(L, "LOW");
 }
+
