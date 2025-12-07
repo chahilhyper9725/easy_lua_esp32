@@ -5,14 +5,7 @@
 
 #include <Arduino.h>
 #include <easy_lua_ble.h>  // Single library header
-// #include "lua_sys.h"         // User module: RTOS, timers, etc.
 
-// ═══════════════════════════════════════════════════════════
-// USER CALLBACK IMPLEMENTATIONS
-// ═══════════════════════════════════════════════════════════
-
-// Callback 1: Hardware initialization
-// Called ONCE after core system initializes
 void my_hardware_init()
 {
     // Initialize lua_sys hardware (FreeRTOS message queue)
@@ -65,6 +58,8 @@ void setup()
 
     // Print system info
     easy_lua_ble::printSystemInfo();
+        // lua_engine_execute("dofile('main.lua')"); // Load Arduino Lua definitions
+
 }
 
 // ═══════════════════════════════════════════════════════════

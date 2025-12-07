@@ -206,7 +206,6 @@ static void system_init_lua()
     // Initialize Lua engine (creates RTOS task internally)
     lua_engine_init();
     delay(500); // Wait for Lua engine to stabilize
-    luaL_dofile(lua_engine_get_state(), "/lua_sys/init.lua");
 
     LOG_INFO("SYSTEM", "✓ Lua engine ready");
 }
@@ -316,4 +315,6 @@ void system_init(
     LOG_INFO("SYSTEM", "  ✓ System Ready!");
     LOG_INFO("SYSTEM", "═══════════════════════════════════════");
     LOG_INFO("SYSTEM", "Connect via BLE to send/receive events");
+//run a entry script if exists
+    lua_engine_execute("dofile('main.lua')"); //
 }
